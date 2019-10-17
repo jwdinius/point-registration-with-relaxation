@@ -28,6 +28,7 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
     Config const & config) noexcept {
     WeightTensor weight = {};
     auto const & eps = config.epsilon;
+    auto const & pw_thresh = config.pairwise_dist_threshold;
     size_t const & m = source_pts.n_cols;
     size_t const & n = target_pts.n_cols;
     for (size_t i = 0; i < m; ++i) {
@@ -39,7 +40,8 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
                         arma::colvec tj = target_pts.col(j);
                         arma::colvec sk = source_pts.col(k);
                         arma::colvec tl = target_pts.col(l);
-                        if (consistency(si, tj, sk, tl) < eps) {
+                        if (consistency(si, tj, sk, tl) < eps
+                                && arma::norm(si - sk, 2) > pw_thresh) {
                             weight[std::make_tuple(i, j, k, l)] = -1.;
                         }
                     }
@@ -95,6 +97,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
     }
 }
 
+//! destructor (nothing to do)
 PointRegRelaxation::~PointRegRelaxation() { }
 
 PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol) const noexcept {
@@ -118,42 +121,39 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol
         constraints_ub[i] = 0.;
     }
 
-    // options for IPOPT solver
+    //! options for IPOPT solver
     std::string options;
-    // Uncomment this if you'd like more print information
     options += "Integer print_level  0\n";
-    // NOTE: Setting sparse to true allows the solver to take advantage
-    // of sparse routines, this makes the computation MUCH FASTER. If you
-    // can uncomment 1 of these and see if it makes a difference or not but
-    // if you uncomment both the computation time should go up in orders of
-    // magnitude.
+    /**
+     * NOTE: Setting sparse to true allows the solver to take advantage
+     * of sparse routines, this makes the computation MUCH FASTER. If you
+     * can uncomment 1 of these and see if it makes a difference or not but
+     * if you uncomment both the computation time should go up in orders of
+     * magnitude.
+     */
     options += "Sparse  true        forward\n";
     options += "Sparse  true        reverse\n";
-    // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
-    // Change this as you see fit.
+    //! timeout period (sec).
     options += "Numeric max_cpu_time          5.0\n";
 
-    // place to return solution
+    //! solve the problem
     CppAD::ipopt::solve_result<Dvec> solution;
-
-    // solve the problem
     CppAD::ipopt::solve<Dvec, ConstrainedObjective>(
             options, z, z_lb, z_ub, constraints_lb,
             constraints_ub, *ptr_obj_, solution);
 
     if (solution.status != CppAD::ipopt::solve_result<Dvec>::success) {
         return solution.status;
-    } else {
-        // otherwise, get the solution
-        // Cost
-        // auto cost = solution.obj_value;
-        // std::cout << "Cost " << cost << std::endl;
-
-        for (size_t i = 0; i < n_vars; ++i) {
-            sol[i] = solution.x[i];
-        }
-        return CppAD::ipopt::solve_result<Dvec>::success;
     }
+    //! solution is valid
+    //! DEBUG - Cost
+    //! auto cost = solution.obj_value;
+
+    for (size_t i = 0; i < n_vars; ++i) {
+        sol(i) = solution.x[i];
+    }
+
+    return CppAD::ipopt::solve_result<Dvec>::success;
 };
 
 Status registration(arma::mat const & source_pts, arma::mat const & target_pts,

@@ -10,8 +10,9 @@
 #include <cppad/ipopt/solve.hpp>
 
 struct Config {
-    Config() : epsilon(1e-1) { }
-    double epsilon;
+    Config() :
+        epsilon(1e-1), pairwise_dist_threshold(1e-1) { }
+    double epsilon, pairwise_dist_threshold;
 };
 
 enum class Status {
@@ -41,25 +42,14 @@ struct key_hash : public std::unary_function<WeightKey_t, size_t> {
 
 struct key_equal : public std::binary_function<WeightKey_t, WeightKey_t, bool> {
    bool operator()(const WeightKey_t& v0, const WeightKey_t& v1) const {
-      return (
-               std::get<0>(v0) == std::get<0>(v1) &&
-               std::get<1>(v0) == std::get<1>(v1) &&
-               std::get<2>(v0) == std::get<2>(v1) &&
-               std::get<3>(v0) == std::get<3>(v1)
-             );
+      return std::get<0>(v0) == std::get<0>(v1) &&
+             std::get<1>(v0) == std::get<1>(v1) &&
+             std::get<2>(v0) == std::get<2>(v1) &&
+             std::get<3>(v0) == std::get<3>(v1);
    }
 };
 
 using WeightTensor = std::unordered_map<WeightKey_t, double, key_hash, key_equal>;
-
-Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config, arma::mat44 &) noexcept;
-
-double consistency(arma::vec3 const & si, arma::vec3 const & tj, arma::vec3 const & sk,
-        arma::vec3 const & tl) noexcept;
-
-WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config) noexcept;
 
 class ConstrainedObjective {
  public:
