@@ -28,8 +28,8 @@ struct key_hash : public std::unary_function<WeightKey_t, size_t> {
    size_t operator()(const WeightKey_t& k) const {
       return std::get<0>(k) ^ std::get<1>(k) ^ std::get<2>(k) ^ std::get<3>(k);
    }
-};
-*/
+};*/
+
 struct key_hash : public std::unary_function<WeightKey_t, size_t> {
     size_t operator()(const WeightKey_t& k) const {
         size_t h1 = std::hash<size_t>()(std::get<0>(k));
@@ -51,6 +51,9 @@ struct key_equal : public std::binary_function<WeightKey_t, WeightKey_t, bool> {
 
 using WeightTensor = std::unordered_map<WeightKey_t, double, key_hash, key_equal>;
 
+WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat const & target_pts,
+    Config const & config) noexcept;
+
 class ConstrainedObjective {
  public:
      using ADvector = CPPAD_TESTVECTOR(CppAD::AD<double>);
@@ -58,7 +61,7 @@ class ConstrainedObjective {
      //! constructor
      explicit ConstrainedObjective(arma::mat const & source_pts,
              arma::mat const & target_pts, Config const & config) :
-         m_(source_pts.n_cols), n_(target_pts.n_cols) {
+         m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)) {
          weights_ = generate_weight_tensor(source_pts, target_pts, config);
          n_constraints_ = m_ + n_ + 1;
      }
@@ -79,11 +82,12 @@ class ConstrainedObjective {
 
 class PointRegRelaxation {
  public:
-     using status_t = CppAD::ipopt::solve_result<CPPAD_TESTVECTOR(double)>::status_type;
+     using Dvec = CPPAD_TESTVECTOR(double);
+     using status_t = CppAD::ipopt::solve_result<Dvec>::status_type;
 
      explicit PointRegRelaxation(arma::mat const & source_pts,
              arma::mat const & target_pts, Config const & config) {
-             ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
+         ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
      }
      
      ~PointRegRelaxation();

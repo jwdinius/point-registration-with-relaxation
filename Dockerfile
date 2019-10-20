@@ -5,12 +5,12 @@ SHELL ["/bin/bash", "-c"]
 
 # INSTALL SYSTEM-WIDE DEPENDENCIES
 RUN apt-get update && apt-get install -y --fix-missing cmake pkg-config git wget \
-    build-essential libboost-all-dev zip gfortran cppad
+    build-essential libboost-all-dev zip gfortran cppad python-dev python-pip
 RUN apt-get install -y --allow-unauthenticated libomp-dev libopenblas-dev liblapack-dev \
     libarpack++2-dev
 
 # INSTALL IPOPT
-COPY ./install_ipopt.sh /
+COPY ./scripts/install_ipopt.sh /
 RUN chmod a+rwx /install_ipopt.sh
 RUN wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.13.zip \
     && unzip Ipopt-3.12.13.zip \
@@ -27,6 +27,9 @@ RUN wget https://github.com/nlohmann/json/archive/release/3.7.0.zip \
 RUN cd json* && mkdir build && cd build \
     && cmake .. \
     && make -j2 && make install
+
+# INSTALL NUMPY
+RUN pip install --no-cache-dir numpy==1.16.2
 
 # REMOVE ARCHIVES
 RUN rm *.tar.* && rm *.zip

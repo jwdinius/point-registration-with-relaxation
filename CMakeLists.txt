@@ -10,10 +10,12 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 find_package(Armadillo REQUIRED)
-find_package(Boost COMPONENTS system filesystem unit_test_framework REQUIRED)
+find_package(Boost COMPONENTS system filesystem unit_test_framework python REQUIRED)
+find_package(PythonLibs 2.7 REQUIRED)
 find_package(nlohmann_json 3.7.0 REQUIRED)
 find_package(CppAD REQUIRED)
 find_package(IPOPT REQUIRED)
+
 # For Boost testing framework (will have no effect on non-testing executables)
 add_definitions(-DBOOST_TEST_DYN_LINK)
 
@@ -22,13 +24,21 @@ include_directories(
     ${CPPAD_INCLUDE_DIRS}
     ${IPOPT_INCLUDE_DIRS}
     ${NLOHMANN_JSON_INCLUDE_INSTALL_DIR}
+    ${PYTHON_INCLUDE_DIR}
     "include"
 )
 
 # compiler flags - NOTE(jwd) - ORTOOLS dependencies will throw pedantic warnings
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
-add_library(registration src/register.cpp)
+add_library(registration SHARED src/register.cpp)
+target_link_libraries(registration ${IPOPT_LIBRARIES} ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
+
+add_library(pyregistration SHARED src/python_wrapper.cpp)
+set_target_properties(pyregistration PROPERTIES PREFIX "")
+target_link_libraries(pyregistration ${BOOST_LIBRARIES} ${PYTHON_LIBRARIES} registration)
+
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/__init__.py "__all__ = ['pyregistration']")
 
 #enable_testing()
 

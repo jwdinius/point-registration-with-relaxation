@@ -11,9 +11,6 @@
 #include <cppad/ipopt/solve.hpp>
 #include "register.hpp"
 
-using Dvec = CPPAD_TESTVECTOR(double);
-
-//! forward declare
 class ConstrainedObjective;
 class PointRegRelaxation;
 
@@ -36,12 +33,17 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
             for (size_t k = 0; k < m; ++k) {
                 for (size_t l = 0; l < n; ++l) {
                     if (i != k && j != l) {
-                        arma::colvec si = source_pts.col(i);
-                        arma::colvec tj = target_pts.col(j);
-                        arma::colvec sk = source_pts.col(k);
-                        arma::colvec tl = target_pts.col(l);
+                        arma::vec3 si = arma::vec3(source_pts.col(i));
+                        arma::vec3 tj = arma::vec3(target_pts.col(j));
+                        arma::vec3 sk = arma::vec3(source_pts.col(k));
+                        arma::vec3 tl = arma::vec3(target_pts.col(l));
+                        /*double c = consistency(si, tj, sk, tl);
+                        double d = arma::norm(si - sk, 2);*/
                         if (consistency(si, tj, sk, tl) < eps
                                 && arma::norm(si - sk, 2) > pw_thresh) {
+                            /*std::cout << "i: " << i << ", j: " << j << ", k: " << k << ", l: " << l << std::endl;
+                            std::cout << "  c(i, j, k, l): " << c << std::endl;
+                            std::cout << "  d(i, k): " << d << std::endl;*/
                             weight[std::make_tuple(i, j, k, l)] = -1.;
                         }
                     }
@@ -49,6 +51,7 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
             }
         }
     }
+    //std::cout << "num nonzero weights: " << weight.size() << std::endl;
     return weight;
 }
 
@@ -65,9 +68,9 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
             for (size_t k = 0; k < m_; ++k) {
                 for (size_t l = 0; l < n_; ++l) {
                     if (i != k && j != l) {
-                        auto key = std::make_tuple(i, j, k, l);
+                        WeightKey_t const key = std::make_tuple(i, j, k, l);
                         if (weights_.find(key) != weights_.end()) {
-                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key] * z[i*n_ + j] * z[k*n_ + l]);
+                            fgrad[curr_idx] -= z[i*n_ + j] * z[k*n_ + l];
                         }
                     }
                 }
@@ -78,21 +81,21 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
     //! constraints:
     //! for all i, \sum_j z_{ij} = 2 - n_ (there are m_ of these)
     for (size_t i = 0; i < m_; ++i) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(n_ - 2);
+        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(n_) - 2.;
         for (size_t j = 0; j < n_; ++j) {
-            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(z[i*n_ + j]);
+            fgrad[curr_idx] += z[i*n_ + j];
         }
     }
 
-    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(2*m_ - n_);
+    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(2*m_) - static_cast<CppAD::AD<double>>(n_);
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[curr_idx] += static_cast<CppAD::AD<double>>(z[m_*n_ + j]);
+        fgrad[curr_idx] += z[m_*n_ + j];
     }
 
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_ - 1);
+        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_) - 1.;
         for (size_t i = 0; i <= m_; ++i) {
-            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(z[i*n_ + j]);
+            fgrad[curr_idx] += z[i*n_ + j];
         }
     }
 }
@@ -101,15 +104,58 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
 PointRegRelaxation::~PointRegRelaxation() { }
 
 PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol) const noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
+    auto const & n = ptr_obj_->num_target_pts();
     auto const & n_vars = ptr_obj_->state_length();
     auto const & n_constraints = ptr_obj_->num_constraints();
     sol.resize(n_vars);
-
+    //std::cout << "m: " << m << ", n: " << n << std::endl;
     Dvec z(n_vars);
+    // assumes index i in source set maps to index i in target set
+    // could randomize this
+    /*
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            if (i == j) {
+                z[i*n + j] = 1.;
+            } else {
+                z[i*n + j] = -1.;
+            }
+        }
+    }
+
+    for (size_t j = 0; j < n; ++j) {
+        if (j < m) {
+            z[m*n + j] = -1.;
+        } else {
+            z[m*n + j] = 1.;
+        }
+    }
+
+    ConstrainedObjective::ADvector _z(n_vars);
+    for (size_t i = 0; i < n_vars; ++i) {
+        _z[i] = z[i];
+    }
+    */
+
+    for (size_t i = 0; i <= m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            z[i*n + j] = 0.;
+        }
+    }
+    /*
+    //! DEBUG
+    ConstrainedObjective::ADvector f(n_constraints+1);
+    (*ptr_obj_)(f, _z);
+    for (size_t i = 0; i < n_constraints; ++i) {
+        std::cout << "f[" << i << "]: " << f[i] << std::endl;
+    }
+    //! end DEBUG
+    */
+
     Dvec z_lb(n_vars);
     Dvec z_ub(n_vars);
     for (size_t i = 0; i < n_vars; ++i) {
-        z[i] = 0.;
         z_lb[i] = -1.;
         z_ub[i] = 1.;
     }
@@ -123,6 +169,7 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol
 
     //! options for IPOPT solver
     std::string options;
+    //options += "Integer print_level  5\n";
     options += "Integer print_level  0\n";
     /**
      * NOTE: Setting sparse to true allows the solver to take advantage
@@ -131,10 +178,12 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol
      * if you uncomment both the computation time should go up in orders of
      * magnitude.
      */
+    //options += "Integer max_iter     1\n";
     options += "Sparse  true        forward\n";
     options += "Sparse  true        reverse\n";
+    //options += "String  mu_strategy adaptive\n";
     //! timeout period (sec).
-    options += "Numeric max_cpu_time          5.0\n";
+    options += "Numeric max_cpu_time          1000.0\n";
 
     //! solve the problem
     CppAD::ipopt::solve_result<Dvec> solution;
@@ -142,7 +191,11 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol
             options, z, z_lb, z_ub, constraints_lb,
             constraints_ub, *ptr_obj_, solution);
 
-    if (solution.status != CppAD::ipopt::solve_result<Dvec>::success) {
+    for (size_t i = 0; i < n_vars; ++i) {
+        sol(i) = solution.x[i];
+    }
+
+    if (solution.status != status_t::success) {
         return solution.status;
     }
     //! solution is valid
@@ -153,7 +206,7 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum(arma::colvec & sol
         sol(i) = solution.x[i];
     }
 
-    return CppAD::ipopt::solve_result<Dvec>::success;
+    return status_t::success;
 };
 
 Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
@@ -167,7 +220,7 @@ Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
 
     arma::colvec optimum( (source_pts.n_cols+1) * target_pts.n_cols );
 
-    if (ptr_optmzr_obj->find_optimum(optimum) != CppAD::ipopt::solve_result<Dvec>::success) {
+    if (ptr_optmzr_obj->find_optimum(optimum) != PointRegRelaxation::status_t::success) {
         return Status::SolverFailed;
     }
     

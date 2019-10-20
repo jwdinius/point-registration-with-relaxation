@@ -1,10 +1,14 @@
 import numpy as np
 import json
-import matplotlib.pyplot as plt
+
+from pyregistration import PythonRegistration, PythonConfig
+
+def indices2Correspondences(inds, num_src, num_tgt):
+    return np.array([(ind // num_tgt, ind % num_tgt) for ind in inds[:num_src]])
 
 if __name__ == "__main__":
     print("Making test data...")
-    m, n = 15, 60
+    m, n = 15, 30
 
     np.random.seed(seed=11011)
     # sample on square [-1, 1] x [-1, 1]
@@ -24,27 +28,32 @@ if __name__ == "__main__":
     # map target points and then subsample (m < n)
     target_pts_xform = np.dot(tgt_to_src, target_pts)
     correspondences = np.random.choice(n, m, replace=False)
-    source_pts = target_pts_xform[:, correspondences] + 0.02*np.random.randn(4, m)
+    #source_pts = target_pts_xform[:, correspondences] + 0.02*np.random.randn(4, m)
+    source_pts = target_pts_xform[:, correspondences]
     source_pts[2, :] = 0.
     source_pts[3, :] = 1.
 
     # for test validation
     src_to_tgt = np.linalg.inv(tgt_to_src)
     source_pts_xform = np.dot(src_to_tgt, source_pts)
-    
     data = {"source_pts": source_pts[:3, :].tolist(),
             "target_pts": target_pts[:3, :].tolist(),
             "correspondences": correspondences.tolist(),
             "src_to_tgt": src_to_tgt.tolist()}
 
-    with open('../test/data.json', 'w') as json_file:
-        json.dump(data, json_file)
-    
-    plt.subplot(221)
-    plt.plot(target_pts[0, :], target_pts[1, :], '.')
-    plt.subplot(222)
-    plt.plot(target_pts[0, :], target_pts[1, :], '.', source_pts[0, :], source_pts[1, :], 'r*')
-    plt.subplot(224)
-    plt.plot(target_pts[0, :], target_pts[1, :], '.', source_pts_xform[0, :], source_pts_xform[1, :], 'r*')
-    plt.show()
+    print("correspondences: ")
+    print(np.array(data['correspondences']))
+
+    pc = PythonConfig()
+    pc.epsilon = 0.1
+    pc.pairwise_dist_threshold = 0.2
+
+    pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc)
+    z_out = np.array(pr.findOptimumVector())
+
+    indices = np.argwhere(z_out > 0.5)
+    correspondences = indices2Correspondences(indices, m, n)
+    tgt_indices = np.array([b for _, b in correspondences]).flatten()
+    print("found correspondences: ")
+    print(tgt_indices)
 
