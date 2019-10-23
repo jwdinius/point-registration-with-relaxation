@@ -20,12 +20,14 @@ struct PythonRegistration {
             }
         }
 
+        //std::cout << source_pts << std::endl;
         arma::mat target_pts(boopy::len(tgt_pts), boopy::len(tgt_pts[0]));
         for (size_t i = 0; i < target_pts.n_rows; ++i) {
             for (size_t j = 0; j < target_pts.n_cols; ++j) {
                 target_pts(i, j) = boopy::extract<double>(tgt_pts[i][j]);
             }
         }
+        //std::cout << target_pts << std::endl;
 
         Config config;
         config.epsilon = py_config.epsilon;
@@ -40,7 +42,7 @@ struct PythonRegistration {
         boopy::list output;
         arma::colvec solution;
         auto status = reg_->find_optimum(solution);
-        std::cout << status << std::endl;
+        //std::cout << status << std::endl;
         for (size_t i = 0; i < solution.n_elem; ++i) {
             output.append(solution[i]);
         }

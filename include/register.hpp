@@ -23,6 +23,7 @@ enum class Status {
 
 using WeightKey_t = std::tuple<size_t, size_t, size_t, size_t>;
 
+
 /*
 struct key_hash : public std::unary_function<WeightKey_t, size_t> {
    size_t operator()(const WeightKey_t& k) const {
@@ -74,6 +75,7 @@ class ConstrainedObjective {
      size_t const num_source_pts() const noexcept { return m_; }
      size_t const num_target_pts() const noexcept { return n_; }
      size_t const state_length() const noexcept { return (m_ + 1) * n_; }
+     WeightTensor const get_weight_tensor() const noexcept { return weights_; }
 
  private:
      WeightTensor weights_;
@@ -91,7 +93,8 @@ class PointRegRelaxation {
      }
      
      ~PointRegRelaxation();
-     
+
+     void warm_start(Dvec & z_init) const noexcept;
      status_t find_optimum(arma::colvec & sol) const noexcept;
 
  private:

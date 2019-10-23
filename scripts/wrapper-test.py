@@ -8,7 +8,7 @@ def indices2Correspondences(inds, num_src, num_tgt):
 
 if __name__ == "__main__":
     print("Making test data...")
-    m, n = 15, 30
+    m, n = 10, 20
 
     np.random.seed(seed=11011)
     # sample on square [-1, 1] x [-1, 1]
@@ -43,10 +43,13 @@ if __name__ == "__main__":
 
     print("correspondences: ")
     print(np.array(data['correspondences']))
-
+    #print("Python")
+    #print(source_pts[:3, :])
+    #print(target_pts[:3, :])
+    #print("end python")
     pc = PythonConfig()
     pc.epsilon = 0.1
-    pc.pairwise_dist_threshold = 0.2
+    pc.pairwise_dist_threshold = 0.05
 
     pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc)
     z_out = np.array(pr.findOptimumVector())
