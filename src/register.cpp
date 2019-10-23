@@ -39,13 +39,7 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
                         arma::vec3 const sk = arma::vec3(source_pts.col(k));
                         arma::vec3 const tl = arma::vec3(target_pts.col(l));
                         double const c = consistency(si, tj, sk, tl);
-                        if (i == 0 && j == 8 && k == 1 && l == 6) {
-                            //std::cout << "JJJJJOOOOEEEE: " << c << std::endl;
-                        }
                         if (c < eps && arma::norm(si - sk, 2) > pw_thresh) {
-                            /*std::cout << "i: " << i << ", j: " << j << ", k: " << k << ", l: " << l << std::endl;
-                            std::cout << "  c(i, j, k, l): " << c << std::endl;
-                            std::cout << "  d(i, k): " << d << std::endl;*/
                             weight[std::make_tuple(i, j, k, l)] = -std::exp(-10.0*c);
                         }
                     }
@@ -72,7 +66,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
                     if (i != k && j != l) {
                         WeightKey_t const key = std::make_tuple(i, j, k, l);
                         if (weights_.find(key) != weights_.end()) {
-                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * z[i*n_ + j] * z[k*n_ + l];
+                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * (z[i*n_ + j] + 1.) * (z[k*n_ + l] + 1.);
                         }
                     }
                 }
@@ -154,6 +148,18 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
         }
     }
 
+    /*
+    assocs[0] = std::make_pair(0, 8);
+    assocs[1] = std::make_pair(1, 6);
+    assocs[2] = std::make_pair(2, 2);
+    assocs[3] = std::make_pair(3, 13);
+    assocs[4] = std::make_pair(4, 16);
+    assocs[5] = std::make_pair(5, 11);
+    assocs[6] = std::make_pair(6, 12);
+    assocs[7] = std::make_pair(7, 15);
+    assocs[8] = std::make_pair(8, 1);
+    assocs[9] = std::make_pair(9, 19);
+    */
     for (size_t i = 0; i < state_length; ++i)
         // when i < m+1, assume no association
         if (i < (m-1)*n + n) {
@@ -163,7 +169,7 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
         }
 
     for (auto const & a : assocs) {
-        std::cout << a.first << ", " << a.second << std::endl;
+        //std::cout << a.first << ", " << a.second << std::endl;
         z[a.first * n + a.second] = 1.0;
         z[m*n + a.second] = -1.0;
     }

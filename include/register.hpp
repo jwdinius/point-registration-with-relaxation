@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <armadillo>
+#include <boost/functional/hash.hpp>
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
 
@@ -31,6 +32,7 @@ struct key_hash : public std::unary_function<WeightKey_t, size_t> {
    }
 };*/
 
+/*
 struct key_hash : public std::unary_function<WeightKey_t, size_t> {
     size_t operator()(const WeightKey_t& k) const {
         size_t h1 = std::hash<size_t>()(std::get<0>(k));
@@ -38,6 +40,17 @@ struct key_hash : public std::unary_function<WeightKey_t, size_t> {
         size_t h3 = std::hash<size_t>()(std::get<2>(k));
         size_t h4 = std::hash<size_t>()(std::get<3>(k));
         return (h1 << 32) + (h2 << 32) + (h3 << 32) + h4;
+    }
+};*/
+
+struct key_hash : public std::unary_function<WeightKey_t, size_t> {
+    size_t operator()(const WeightKey_t& k) const {
+        size_t seed = 0;
+        boost::hash_combine(seed, std::get<0>(k));
+        boost::hash_combine(seed, std::get<1>(k));
+        boost::hash_combine(seed, std::get<2>(k));
+        boost::hash_combine(seed, std::get<3>(k));
+        return seed;
     }
 };
 
