@@ -12,8 +12,10 @@
 
 struct Config {
     Config() :
-        epsilon(1e-1), pairwise_dist_threshold(1e-1) { }
-    double epsilon, pairwise_dist_threshold;
+        epsilon(1e-1), pairwise_dist_threshold(1e-1),
+        corr_threshold(0.5), do_warm_start(true) { }
+    double epsilon, pairwise_dist_threshold, corr_threshold;
+    bool do_warm_start;
 };
 
 enum class Status {
@@ -23,25 +25,6 @@ enum class Status {
 };
 
 using WeightKey_t = std::tuple<size_t, size_t, size_t, size_t>;
-
-
-/*
-struct key_hash : public std::unary_function<WeightKey_t, size_t> {
-   size_t operator()(const WeightKey_t& k) const {
-      return std::get<0>(k) ^ std::get<1>(k) ^ std::get<2>(k) ^ std::get<3>(k);
-   }
-};*/
-
-/*
-struct key_hash : public std::unary_function<WeightKey_t, size_t> {
-    size_t operator()(const WeightKey_t& k) const {
-        size_t h1 = std::hash<size_t>()(std::get<0>(k));
-        size_t h2 = std::hash<size_t>()(std::get<1>(k));
-        size_t h3 = std::hash<size_t>()(std::get<2>(k));
-        size_t h4 = std::hash<size_t>()(std::get<3>(k));
-        return (h1 << 32) + (h2 << 32) + (h3 << 32) + h4;
-    }
-};*/
 
 struct key_hash : public std::unary_function<WeightKey_t, size_t> {
     size_t operator()(const WeightKey_t& k) const {
@@ -100,16 +83,39 @@ class PointRegRelaxation {
      using Dvec = CPPAD_TESTVECTOR(double);
      using status_t = CppAD::ipopt::solve_result<Dvec>::status_type;
 
+     struct key_lthan : public std::binary_function<std::pair<size_t, size_t>, std::pair<size_t, size_t>, bool> {
+         bool operator()(const std::pair<size_t, size_t> & left, const std::pair<size_t, size_t> & right) const {
+             if (left.first == right.first) {
+                 return left.second < right.second;
+             } else {
+                 return left.first < right.first;
+             }
+         }
+     };
+
+     using correspondences_t = std::map<std::pair<size_t, size_t>, double, key_lthan>;
+
      explicit PointRegRelaxation(arma::mat const & source_pts,
-             arma::mat const & target_pts, Config const & config) {
+             arma::mat const & target_pts, Config const & config) : config_(config) {
          ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
+         optimum_.resize(ptr_obj_->state_length());
      }
      
      ~PointRegRelaxation();
 
      void warm_start(Dvec & z_init) const noexcept;
-     status_t find_optimum(arma::colvec & sol) const noexcept;
+     status_t find_optimum() noexcept;
+     void find_correspondences() noexcept;
+     correspondences_t const get_correspondences() const noexcept { return correspondences_; }
+     arma::colvec const get_optimum() const noexcept { return optimum_; }
 
  private:
      std::unique_ptr<ConstrainedObjective> ptr_obj_;
+     Config config_;
+     correspondences_t correspondences_;
+     arma::colvec optimum_; 
 };
+
+Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
+    Config const & config, arma::colvec & optimum, PointRegRelaxation::correspondences_t & correspondences,
+    arma::mat44 & H_optimal) noexcept;

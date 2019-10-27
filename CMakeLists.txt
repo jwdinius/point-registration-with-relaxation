@@ -28,13 +28,13 @@ include_directories(
     "include"
 )
 
-# compiler flags - NOTE(jwd) - ORTOOLS dependencies will throw pedantic warnings
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
 add_library(registration SHARED src/register.cpp)
-target_link_libraries(registration ${IPOPT_LIBRARIES} ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
+target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES}
+    ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
 
-add_library(pyregistration SHARED src/python_wrapper.cpp)
+add_library(pyregistration SHARED src/python-wrapper.cpp)
 set_target_properties(pyregistration PROPERTIES PREFIX "")
 target_link_libraries(pyregistration ${BOOST_LIBRARIES} ${PYTHON_LIBRARIES} registration)
 

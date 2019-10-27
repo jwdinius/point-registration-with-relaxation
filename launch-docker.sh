@@ -3,4 +3,5 @@ docker run -it --rm \
     --name register-c \
     --net host \
     --privileged \
+    --runtime=nvidia \
     register
