@@ -1,22 +1,8 @@
-FROM nvidia/opengl:1.0-glvnd-runtime-ubuntu16.04
+FROM ubuntu:bionic
 
+# NOTE: build this image from dir above Dockerfile location
 # USE BASH
 SHELL ["/bin/bash", "-c"]
-
-ARG username=relax
-ARG groupid=1000
-ARG userid=1000
-ENV USER=$username
-
-# RUN LINE BELOW TO REMOVE debconf ERRORS (MUST RUN BEFORE ANY apt-get CALLS)
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-
-# setup environment
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
-
-#### UPDATE BEFORE REMAINDER
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
 
 # INSTALL SYSTEM-WIDE DEPENDENCIES
 RUN apt-get update && apt-get install -y --fix-missing cmake pkg-config git wget \
@@ -45,26 +31,6 @@ RUN cd json* && mkdir build && cd build \
 
 # INSTALL NUMPY
 RUN pip install --no-cache-dir numpy==1.16.2
-RUN pip install --no-cache-dir matplotlib==2.0.2
-
-RUN apt-get install -y freeglut3-dev python-tk sudo
 
 # REMOVE ARCHIVES
 RUN rm *.tar.* && rm *.zip
-
-# setup user env at the end
-# -m option creates a fake writable home folder
-RUN adduser --disabled-password --gecos '' $username
-RUN adduser $username sudo
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-USER $username
-WORKDIR /home/$username
-
-RUN mkdir -p /home/$username/workspace
-
-# nvidia-container-runtime
-ENV NVIDIA_VISIBLE_DEVICES \
-    ${NVIDIA_VISIBLE_DEVICES:-all}
-ENV NVIDIA_DRIVER_CAPABILITIES \
-    ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics

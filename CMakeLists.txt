@@ -40,12 +40,12 @@ target_link_libraries(pyregistration ${BOOST_LIBRARIES} ${PYTHON_LIBRARIES} regi
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/__init__.py "__all__ = ['pyregistration']")
 
-#enable_testing()
+enable_testing()
 
-#add_executable(register-test tests/register_ut.cpp)
-#target_link_libraries(sdrsac-test ${Boost_FILESYSTEM_LIBRARY}
-#    ${Boost_SYSTEM_LIBRARY}
-#    ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
-#    ${ARMADILLO_LIBRARIES}
-#)
-#add_test(SDRSACTest sdrsac-test)
+add_executable(register-test tests/register-unit.cpp)
+target_link_libraries(register-test ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
+    registration
+)
+add_test(RegistrationTest register-test)

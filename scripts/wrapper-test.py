@@ -6,9 +6,9 @@ from pyregistration import PythonRegistration, PythonConfig
 if __name__ == "__main__":
     m, n = 15, 40
     noise_val = 0.0
-    make_ut_data = True
-    run_optimization = False
-    make_plots = False
+    make_ut_data = False
+    run_optimization = True
+    make_plots = True
 
     np.random.seed(seed=11011)
     # sample on square [-1, 1] x [-1, 1]
@@ -39,15 +39,15 @@ if __name__ == "__main__":
                 "correspondences": correspondences.tolist(),
                 "src_to_tgt": src_to_tgt.tolist()}
 
-        with open('../test/data-for-unittest.json', 'w') as json_file:
+        with open('../tests/testdata/registration-data.json', 'w') as json_file:
             json.dump(data, json_file)
 
     if run_optimization:
         pc = PythonConfig()
         pc.epsilon = 0.1
-        pc.pairwise_dist_threshold = 0.1
-        pc.corr_threshold = 0.5
-        pc.do_warm_start = True
+        pc.pairwiseDistThreshold = 0.1
+        pc.corrThreshold = 0.5
+        pc.doWarmStart = True
 
         pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc)
 
