@@ -51,4 +51,4 @@ _It's worth noting the quality of the solution is much better than results repor
 ## Plot 3: Transform Source Points onto Target Set
 ![](./figures/transformation-nonoise.png)
 
-_Note: 
+_Note: The rate of correct correspondence matching is 100% for the example tested, hence the perfect overlap of the transformed source point set onto the target point set._
