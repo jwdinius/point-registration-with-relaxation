@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE( full_pipeline_test ) {
     arma::mat44 H;
     PointRegRelaxation::correspondences_t corrs;
     arma::colvec optimum;  //! not-used; corrs has the desired scores
-    BOOST_CHECK( registration(src_pts, tgt_pts, config, optimum, corrs, H) == Status::Success);
+    BOOST_CHECK( registration(src_pts, tgt_pts, config, src_pts.n_cols, optimum, corrs, H) == Status::Success);
 
     //! checking that key is present in both correspondence sets is enough; see `find_correspondences` implementation
     for (auto const & c : _corrs) {

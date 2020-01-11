@@ -49,7 +49,7 @@ if __name__ == "__main__":
         pc.corrThreshold = 0.5
         pc.doWarmStart = True
 
-        pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc)
+        pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc, source_pts.shape[1])
 
         if make_plots:
             z_out = np.array(pr.optimum)
@@ -63,12 +63,12 @@ if __name__ == "__main__":
             plt.title("Optimal Solution from IPOPT")
             plt.figure()
             ax1 = plt.subplot(121)
-            ax1.plot(target_pts[0, :], target_pts[1, :], '.', source_pts[0, :], source_pts[1, :], 'r*')
+            ax1.plot(target_pts[0, :], target_pts[1, :], 'o', source_pts[0, :], source_pts[1, :], 'r.')
             ax1.set_ylabel("y")
             ax1.set_title("Original Alignment")
             ax2 = plt.subplot(122)
-            ax2.plot(target_pts[0, :], target_pts[1, :], '.', label="target")
-            ax2.plot(source_pts[0, :], source_pts[1, :], 'r*', label="source")
+            ax2.plot(target_pts[0, :], target_pts[1, :], 'o', label="target")
+            ax2.plot(source_pts[0, :], source_pts[1, :], 'r.', label="source")
             legend_made = False
             for c in pr.correspondences.keys():
                 if not legend_made:
@@ -81,8 +81,8 @@ if __name__ == "__main__":
             ax2.set_xlabel("x")
             
             plt.figure()
-            plt.plot(target_pts[0, :], target_pts[1, :], '.', label="target")
-            plt.plot(source_pts_xform[0, :], source_pts_xform[1, :], 'r*', label="source")
+            plt.plot(target_pts[0, :], target_pts[1, :], 'o', label="target")
+            plt.plot(source_pts_xform[0, :], source_pts_xform[1, :], 'r.', label="source")
             plt.xlabel("x")
             plt.ylabel("y")
             plt.legend()

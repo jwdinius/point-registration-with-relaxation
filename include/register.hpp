@@ -250,7 +250,8 @@ class PointRegRelaxation {
       * @return
       */
      explicit PointRegRelaxation(arma::mat const & source_pts,
-             arma::mat const & target_pts, Config const & config) : config_(config) {
+             arma::mat const & target_pts, Config const & config,
+             size_t const & min_corr) : config_(config), min_corr_(min_corr) {
          ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
          optimum_.resize(ptr_obj_->state_length());
      }
@@ -305,8 +306,9 @@ class PointRegRelaxation {
      correspondences_t const get_correspondences() const noexcept { return correspondences_; }
 
  private:
-     std::unique_ptr<ConstrainedObjective> ptr_obj_;
      Config config_;
+     size_t min_corr_;
+     std::unique_ptr<ConstrainedObjective> ptr_obj_;
      correspondences_t correspondences_;
      arma::colvec optimum_; 
 };
@@ -317,6 +319,7 @@ class PointRegRelaxation {
  * @param [in] src_pts points to transform
  * @param [in] dst_pts target points
  * @param [in] config `Config` instance with optimization parameters; see `Config` definition
+ * @param [in] min_corr minimum number of correspondences to identify between source and target sets
  * @param [in][out] optimum optimum for constrained objective identified by IPOPT
  * @param [in][out] correspondences pairwise correspondences identified between source and target point sets
  * @param [in][out] H_optimal best-fit transformation to align points in homogeneous coordinates
@@ -326,8 +329,8 @@ class PointRegRelaxation {
  * @note see original reference, available at https://www.sciencedirect.com/science/article/pii/S1077314208000891
  */
 Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config, arma::colvec & optimum, PointRegRelaxation::correspondences_t & correspondences,
-    arma::mat44 & H_optimal) noexcept;
+    Config const & config, size_t const & min_corr, arma::colvec & optimum,
+    PointRegRelaxation::correspondences_t & correspondences, arma::mat44 & H_optimal) noexcept;
 
 /**
  * @brief Identify best transformation between two sets of points with known correspondences 

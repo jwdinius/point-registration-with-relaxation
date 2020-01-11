@@ -147,8 +147,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
                     if (i != k && j != l) {
                         WeightKey_t const key = std::make_tuple(i, j, k, l);
                         if (weights_.find(key) != weights_.end()) {
-                            //! remove the 1/2 from each term, since minimum is invariant under scaling
-                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * (z[i*n_ + j] + 1.) * (z[k*n_ + l] + 1.);
+                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * z[i*n_ + j] * z[k*n_ + l];
                         }
                     }
                 }
@@ -159,20 +158,20 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
     //! constraints (see paper):
     //! 1) Each source point should be mapped to a target point
     for (size_t i = 0; i < m_; ++i) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(n_) - 2.;
+        fgrad[++curr_idx] = -1.;
         for (size_t j = 0; j < n_; ++j) {
             fgrad[curr_idx] += z[i*n_ + j];
         }
     }
 
     //! 2) Two source points cannot be mapped to the same target point
-    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(2*m_) - static_cast<CppAD::AD<double>>(n_);
+    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_) - static_cast<CppAD::AD<double>>(n_);
     for (size_t j = 0; j < n_; ++j) {
         fgrad[curr_idx] += z[m_*n_ + j];
     }
 
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_) - 1.;
+        fgrad[++curr_idx] = -1.;
         for (size_t i = 0; i <= m_; ++i) {
             fgrad[curr_idx] += z[i*n_ + j];
         }
@@ -253,7 +252,7 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
     for (size_t i = 0; i < state_length; ++i)
         // when i < m+1, assume no association
         if (i < (m-1)*n + n) {
-            z[i] = -1.0;
+            z[i] = 0.0;
         } else { 
             z[i] = 1.0;
         }
@@ -261,7 +260,7 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
     //! NOTE: this obeys equality constraints
     for (auto const & a : assocs) {
         z[a.first * n + a.second] = 1.0;
-        z[m*n + a.second] = -1.0;
+        z[m*n + a.second] = 0.0;
     }
 
     return;
@@ -286,11 +285,11 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
         warm_start(z);
     }
 
-    //! setup inequality constraints on variables: -1 <= z_{ij} <= 1 for all i,j
+    //! setup inequality constraints on variables: 0 <= z_{ij} <= 1 for all i,j
     Dvec z_lb(n_vars);
     Dvec z_ub(n_vars);
     for (size_t i = 0; i < n_vars; ++i) {
-        z_lb[i] = -1.;
+        z_lb[i] = 0.;
         z_ub[i] = 1.;
     }
 
@@ -383,13 +382,16 @@ void PointRegRelaxation::find_correspondences() noexcept {
  * @note see original reference, available at https://www.sciencedirect.com/science/article/pii/S1077314208000891
  */
 Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config, arma::colvec & optimum, PointRegRelaxation::correspondences_t & correspondences,
-    arma::mat44 & H_optimal) noexcept {
+    Config const & config, size_t const & min_corr, arma::colvec & optimum,
+    PointRegRelaxation::correspondences_t & correspondences, arma::mat44 & H_optimal) noexcept {
     if (source_pts.n_cols >= target_pts.n_cols) {
         std::cout << "no. of source pts must be less than no. of target pts" << std::endl;
         return Status::BadInput;
+    } else if (min_corr > source_pts.n_cols) {
+        std::cout << "no. of minimum correspondences must be less than or equal to no. of source pts" << std::endl;
+        return Status::BadInput;
     }
-    auto ptr_optmzr_obj = std::make_unique<PointRegRelaxation>(source_pts, target_pts, config);
+    auto ptr_optmzr_obj = std::make_unique<PointRegRelaxation>(source_pts, target_pts, config, min_corr);
 
     if (ptr_optmzr_obj->find_optimum() != PointRegRelaxation::status_t::success) {
         return Status::SolverFailed;
