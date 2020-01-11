@@ -10,11 +10,15 @@
 #include <vector>
 
 #include <cppad/ipopt/solve.hpp>
+#include <ortools/linear_solver/linear_solver.h>  // NOLINT [build/include_order]
 #include "register.hpp"
 
 //! forward declarations to minimize compile time
 class ConstrainedObjective;
 class PointRegRelaxation;
+
+//! namespaces
+namespace gor = operations_research;  // from ORTools
 
 /**
  * @brief compute pairwise consistency score; see Eqn. 49 from reference
@@ -118,6 +122,92 @@ void best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 & H_op
     return;
 }
 
+/**
+ * @brief Find vector x that minimizes inner product <c, x> subject to bounds constraints
+ * lb <= x <= ub and equality constraint A*x==b
+ *
+ * @param [in] c vector c in <c, x> above
+ * @param [in] A matrix A in Ax==b above
+ * @param [in] b vector b in Ax==b above
+ * @param [in] lower_bound lower bound on (individual components of) x
+ * @param [in] upper_bound upper bound on (individual components of) x
+ * @param [in][out] x_opt value of x that minimizes <c, x> subject to defined constraints
+ * @return
+ *
+ * @note Uses Google's ORTools
+ */
+bool linear_programming(arma::colvec const & c, arma::mat const & A, arma::colvec const & b,
+        double const & lower_bound, double const & upper_bound, arma::colvec & x_opt) noexcept {
+    //! check correct size
+    if (c.n_rows != A.n_cols) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": First and third arguments must have the same number of columns" << std::endl;
+        return false;
+    } else if (b.n_rows != A.n_rows) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": Second and third arguments must have the same number of columns" << std::endl;
+        return false;
+    } else if (c.n_rows != x_opt.n_rows) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": First and sixth arguments must have the same number of columns" << std::endl;
+        return false;
+    }
+
+    //! overwrite x_opt with infeasible values
+    auto const infeasible_val = lower_bound - 1.;
+    x_opt.fill(infeasible_val);
+
+    //! setup solver
+    gor::MPSolver solver("NULL", gor::MPSolver::GLOP_LINEAR_PROGRAMMING);
+    std::vector<gor::MPVariable*> opt_sol;
+    gor::MPObjective* const objective = solver.MutableObjective();
+
+    //! setup optimal solution array: lower_bound le xi le upper_bound for all 0 le i lt size
+    solver.MakeNumVarArray(/* size */ c.n_rows,
+            /* lb */ lower_bound,
+            /* ub */ upper_bound,
+            /* name prefix */ "X",
+            /* opt var ref */ &opt_sol);
+
+    //! c.t * x
+    for (size_t i = 0; i < c.n_rows; ++i) {
+        objective->SetCoefficient(opt_sol[i], c(i));
+    }
+
+    //! minimization is the goal : min c.t * x
+    objective->SetMinimization();
+
+    //! constraints: A*x le b
+    std::vector<gor::MPConstraint*> constraints;
+    for (size_t i = 0; i < A.n_rows; ++i) {
+        constraints.push_back( solver.MakeRowConstraint( /* lower bound */ -solver.infinity(),
+                    /* upper bound */ b(i) ) );
+        for (size_t j = 0; j < A.n_cols; ++j) {
+            constraints.back()->SetCoefficient(opt_sol[j], A(i, j));
+        }
+    }
+
+    //! find the optimal value
+    // XXX if this is too slow, set no. of threads to be > 1 with solver.setNumThreads
+    gor::MPSolver::ResultStatus const result_status = solver.Solve();
+    //! check solution
+    if (result_status != gor::MPSolver::OPTIMAL) {
+        LOG(INFO) << "The problem does not have an optimal solution!";
+        if (result_status == gor::MPSolver::FEASIBLE) {
+            LOG(INFO) << "A potentially suboptimal solution was found";
+        } else {
+            LOG(INFO) << "The solver could not solve the problem.";
+        }
+        return false;
+    }
+
+    //! solver was successful - write output and return true
+    for (size_t i = 0; i < x_opt.n_rows; ++i) {
+        x_opt(i) = opt_sol[i]->solution_value();
+    }
+    return true;
+}
+
 /** ConstrainedObjective::~ConstrainedObjective()
  * @brief destructor for constrained objective function
  *
@@ -156,22 +246,23 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
     }
 
     //! constraints (see paper):
-    //! 1) Each source point should be mapped to a target point
+    //! 1) Each source point should be mapped to AT MOST target point
     for (size_t i = 0; i < m_; ++i) {
-        fgrad[++curr_idx] = -1.;
+        ++curr_idx;
         for (size_t j = 0; j < n_; ++j) {
             fgrad[curr_idx] += z[i*n_ + j];
         }
     }
 
-    //! 2) Two source points cannot be mapped to the same target point
-    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_) - static_cast<CppAD::AD<double>>(n_);
+    //! 2) Need to find AT LEAST min_corr_ correspondences, and
+    //! 3) Each target point can have AT MOST once corresponding source point
+    ++curr_idx;
     for (size_t j = 0; j < n_; ++j) {
         fgrad[curr_idx] += z[m_*n_ + j];
     }
 
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[++curr_idx] = -1.;
+        ++curr_idx;
         for (size_t i = 0; i <= m_; ++i) {
             fgrad[curr_idx] += z[i*n_ + j];
         }
@@ -276,6 +367,9 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
  * @note see Eqn. 48 in paper and subsequent section for details
  */
 PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
+    auto const & n = ptr_obj_->num_target_pts();
+    auto const & k = ptr_obj_->num_min_corr();
     auto const & n_vars = ptr_obj_->state_length();
     auto const & n_constraints = ptr_obj_->num_constraints();
 
@@ -293,12 +387,22 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
         z_ub[i] = 1.;
     }
 
-    //! setup equality constraints g_i(z) == 0
+    //! setup constraints l_i <= g_i(z) <= u_i
     Dvec constraints_lb(n_constraints);
     Dvec constraints_ub(n_constraints);
-    for (size_t i = 0; i < n_constraints; ++i) {
-        constraints_lb[i] = 0.;
-        constraints_ub[i] = 0.;
+    //! see 1) above: for all 0 <= m <= 1, 0 <= sum_j z_{ij} <= 1
+    size_t ctr = 0;
+    for (size_t i = 0; i < m; ++i) {
+        constraints_lb[ctr] = 0.;
+        constraints_ub[ctr++] = 1.;
+    }
+    
+    //! see 2), 3) above
+    constraints_lb[ctr] = 0.;
+    constraints_ub[ctr++] = n - k;
+    for (size_t j = 0; j < n; ++j) {
+        constraints_lb[ctr] = 1.;
+        constraints_ub[ctr++] = 1.;
     }
 
     //! options for IPOPT solver
@@ -345,12 +449,13 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
  */
 void PointRegRelaxation::find_correspondences() noexcept {
     auto const & n = ptr_obj_->num_target_pts();
+    auto const & k = ptr_obj_->num_min_corr();
     auto const & n_vars = ptr_obj_->state_length();
 
     //! remove slack variables
     arma::colvec sol_noslack = optimum_(arma::span(0, n_vars - n - 1)); 
-    //! find indices of valid correspondences i->j
-    arma::uvec const ids = arma::find(sol_noslack > config_.corr_threshold);
+    //! find k best correspondences i->j
+    arma::uvec const ids = arma::find(sol_noslack > config_.corr_threshold);  // XXX(jwd) this should be done with ORtools
     std::list<size_t> corr_ids;
     for (size_t i = 0; i < ids.n_elem; ++i) {
         corr_ids.emplace_back(static_cast<size_t>(ids(i)));
@@ -384,8 +489,8 @@ void PointRegRelaxation::find_correspondences() noexcept {
 Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
     Config const & config, size_t const & min_corr, arma::colvec & optimum,
     PointRegRelaxation::correspondences_t & correspondences, arma::mat44 & H_optimal) noexcept {
-    if (source_pts.n_cols >= target_pts.n_cols) {
-        std::cout << "no. of source pts must be less than no. of target pts" << std::endl;
+    if (source_pts.n_cols > target_pts.n_cols) {
+        std::cout << "no. of source pts must be AT MOST the no. of target pts" << std::endl;
         return Status::BadInput;
     } else if (min_corr > source_pts.n_cols) {
         std::cout << "no. of minimum correspondences must be less than or equal to no. of source pts" << std::endl;

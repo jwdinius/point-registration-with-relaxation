@@ -124,11 +124,13 @@ class ConstrainedObjective {
       * @param[in] source_pts distribution of (columnar) source points
       * @param[in] target_pts distribution of (columnar) target points
       * @param[in] config `Config` instance with optimization parameters; see `Config` definition
+      * @param[in] min_corr minimum number of corresondences required
       * @return
       */
      explicit ConstrainedObjective(arma::mat const & source_pts,
-             arma::mat const & target_pts, Config const & config) :
-         m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)) {
+             arma::mat const & target_pts, Config const & config, size_t const & min_corr) :
+         m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)),
+         min_corr_(min_corr) {
          weights_ = generate_weight_tensor(source_pts, target_pts, config);
          n_constraints_ = m_ + n_ + 1;
      }
@@ -174,6 +176,8 @@ class ConstrainedObjective {
       */
      size_t const num_target_pts() const noexcept { return n_; }
      
+     size_t const num_min_corr() const noexcept { return min_corr_; }
+     
      /** ConstrainedObjective::state_length()
       * @brief get size of state vector for optimization objective
       *
@@ -193,7 +197,7 @@ class ConstrainedObjective {
 
  private:
      WeightTensor weights_;
-     size_t m_, n_, n_constraints_;
+     size_t m_, n_, min_corr_, n_constraints_;
 };
 
 /** @class PointRegRelaxation
@@ -251,8 +255,8 @@ class PointRegRelaxation {
       */
      explicit PointRegRelaxation(arma::mat const & source_pts,
              arma::mat const & target_pts, Config const & config,
-             size_t const & min_corr) : config_(config), min_corr_(min_corr) {
-         ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
+             size_t const & min_corr) : config_(config) {
+         ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config, min_corr);
          optimum_.resize(ptr_obj_->state_length());
      }
      
@@ -307,7 +311,6 @@ class PointRegRelaxation {
 
  private:
      Config config_;
-     size_t min_corr_;
      std::unique_ptr<ConstrainedObjective> ptr_obj_;
      correspondences_t correspondences_;
      arma::colvec optimum_; 
