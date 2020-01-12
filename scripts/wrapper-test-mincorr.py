@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from pyregistration import PythonRegistration, PythonConfig
 
 if __name__ == "__main__":
-    m, n = 15, 40
+    m, n = 7, 15
     noise_val = 0.0
     make_ut_data = False
     run_optimization = True
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     target_pts[3, :] = 1.
 
     # transform
-    ang = np.pi / 4.
+    ang = np.pi / 2.
     ca, sa = np.cos(ang), np.sin(ang)
     xt, yt = 1.0, 2.0
     tgt_to_src = np.array([[ca, sa, 0., xt],
@@ -31,19 +31,24 @@ if __name__ == "__main__":
     source_pts = target_pts_xform[:, correspondences] + noise_val*np.random.randn(4, m)
     source_pts[2, :] = 0.
     source_pts[3, :] = 1.
-
+    # add n-m random points to source set
+    source_pts_aug = 2. * np.random.random((4, n-m)) - 1.
+    source_pts_aug[2, :] = 0.
+    source_pts_aug[3, :] = 1.
+    source_pts = np.hstack((source_pts, source_pts_aug))
+    src_to_tgt = np.linalg.inv(tgt_to_src)
+    
     print("#####")
     print(correspondences.tolist())
     print("#####")
-
+    
     if make_ut_data:
-        src_to_tgt = np.linalg.inv(tgt_to_src)
         data = {"source_pts": source_pts[:3, :].tolist(),
                 "target_pts": target_pts[:3, :].tolist(),
                 "correspondences": correspondences.tolist(),
                 "src_to_tgt": src_to_tgt.tolist()}
 
-        with open('../tests/testdata/registration-data.json', 'w') as json_file:
+        with open('../tests/testdata/registration-data-mincorr.json', 'w') as json_file:
             json.dump(data, json_file)
 
     if run_optimization:
@@ -54,12 +59,14 @@ if __name__ == "__main__":
         pc.doWarmStart = True
         #pc.doWarmStart = False
 
-        pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc, source_pts.shape[1])
+
+        pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc, m)
 
         if make_plots:
             z_out = np.array(pr.optimum)
             H_out = np.array(pr.transform)
             source_pts_xform = np.dot(H_out, source_pts)
+            source_pts_xform_true = np.dot(src_to_tgt, source_pts)
             
             plt.figure()
             plt.plot(z_out, '.')
@@ -92,4 +99,12 @@ if __name__ == "__main__":
             plt.ylabel("y")
             plt.legend()
             plt.title("Source Points Realigned")
+            
+            plt.figure()
+            plt.plot(target_pts[0, :], target_pts[1, :], 'o', label="target")
+            plt.plot(source_pts_xform_true[0, :], source_pts_xform_true[1, :], 'r.', label="source")
+            plt.xlabel("x")
+            plt.ylabel("y")
+            plt.legend()
+            plt.title("Source Points Realigned (truth)")
             plt.show()

@@ -237,7 +237,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
                     if (i != k && j != l) {
                         WeightKey_t const key = std::make_tuple(i, j, k, l);
                         if (weights_.find(key) != weights_.end()) {
-                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * z[i*n_ + j] * z[k*n_ + l];
+                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * z[i*(n_+1) + j] * z[k*(n_+1) + l];
                         }
                     }
                 }
@@ -245,28 +245,32 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
         }
     }
 
-    //! constraints (see paper):
-    //! 1) Each source point should be mapped to AT MOST target point
+    //! constraints:
     for (size_t i = 0; i < m_; ++i) {
         ++curr_idx;
-        for (size_t j = 0; j < n_; ++j) {
-            fgrad[curr_idx] += z[i*n_ + j];
+        for (size_t j = 0; j <= n_; ++j) {
+            fgrad[curr_idx] += z[i*(n_+1) + j];
         }
     }
 
-    //! 2) Need to find AT LEAST min_corr_ correspondences, and
-    //! 3) Each target point can have AT MOST once corresponding source point
     ++curr_idx;
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[curr_idx] += z[m_*n_ + j];
+        fgrad[curr_idx] += z[m_*(n_+1) + j];
     }
 
     for (size_t j = 0; j < n_; ++j) {
         ++curr_idx;
         for (size_t i = 0; i <= m_; ++i) {
-            fgrad[curr_idx] += z[i*n_ + j];
+            fgrad[curr_idx] += z[i*(n_+1) + j];
         }
     }
+
+    ++curr_idx;
+    for (size_t i = 0; i < m_; ++i) {
+        fgrad[curr_idx] += z[i*(n_+1) + n_];
+    }
+
+
 }
 
 /** PointRegRelaxation::~PointRegRelaxation()
@@ -342,7 +346,7 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
     //! and slack-variables to 1.0 (again, no correspondence)
     for (size_t i = 0; i < state_length; ++i)
         // when i < m+1, assume no association
-        if (i < (m-1)*n + n) {
+        if (i < (m-1)*(n+1) + n) {
             z[i] = 0.0;
         } else { 
             z[i] = 1.0;
@@ -350,8 +354,8 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
     //! overwrite values at indices associated with best correspondence score
     //! NOTE: this obeys equality constraints
     for (auto const & a : assocs) {
-        z[a.first * n + a.second] = 1.0;
-        z[m*n + a.second] = 0.0;
+        z[a.first * (n+1) + a.second] = 1.0;
+        z[m * (n+1) + a.second] = 0.0;
     }
 
     return;
@@ -373,6 +377,8 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
     auto const & n_vars = ptr_obj_->state_length();
     auto const & n_constraints = ptr_obj_->num_constraints();
 
+    std::cout << "Weight Tensor has " << ptr_obj_->get_weight_tensor().size() << " key-val pairs." << std::endl;
+    
     //! do warm start, if configured to do so
     Dvec z(n_vars);
     if (config_.do_warm_start) { 
@@ -386,24 +392,26 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
         z_lb[i] = 0.;
         z_ub[i] = 1.;
     }
+    //! overwrite last value to avoid checking conditional for all iterations
+    z_ub[n_vars-1] = 0.;
 
     //! setup constraints l_i <= g_i(z) <= u_i
     Dvec constraints_lb(n_constraints);
     Dvec constraints_ub(n_constraints);
-    //! see 1) above: for all 0 <= m <= 1, 0 <= sum_j z_{ij} <= 1
     size_t ctr = 0;
     for (size_t i = 0; i < m; ++i) {
-        constraints_lb[ctr] = 0.;
+        constraints_lb[ctr] = 1.;
         constraints_ub[ctr++] = 1.;
     }
     
-    //! see 2), 3) above
-    constraints_lb[ctr] = 0.;
+    constraints_lb[ctr] = n - m;
     constraints_ub[ctr++] = n - k;
     for (size_t j = 0; j < n; ++j) {
         constraints_lb[ctr] = 1.;
         constraints_ub[ctr++] = 1.;
     }
+    constraints_lb[ctr] = m - k;
+    constraints_ub[ctr] = m - k;
 
     //! options for IPOPT solver
     std::string options;
@@ -448,25 +456,32 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
  * @return
  */
 void PointRegRelaxation::find_correspondences() noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
     auto const & n = ptr_obj_->num_target_pts();
-    auto const & k = ptr_obj_->num_min_corr();
-    auto const & n_vars = ptr_obj_->state_length();
+    //auto const & k = ptr_obj_->num_min_corr();
 
-    //! remove slack variables
-    arma::colvec sol_noslack = optimum_(arma::span(0, n_vars - n - 1)); 
+    //! remove slack variables (uses column-wise vectorization for speed, see Armadillo docs, #vectorise)
+    /*arma::mat opt_colwise = arma::reshape(optimum_, m + 1, n + 1);
+    arma::colvec sol_noslack = arma::vectorise( opt_colwise( arma::span(0, m-1), arma::span(0, n-1) ) );*/ 
+
+    //XXX(jwd) - this is a hack, for the time being, need to get ORtools projection to permutation matrix yada yada
+    // working
     //! find k best correspondences i->j
-    arma::uvec const ids = arma::find(sol_noslack > config_.corr_threshold);  // XXX(jwd) this should be done with ORtools
+    arma::uvec const ids = arma::find(optimum_ > config_.corr_threshold);  // XXX(jwd) this should be done with ORtools
     std::list<size_t> corr_ids;
     for (size_t i = 0; i < ids.n_elem; ++i) {
         corr_ids.emplace_back(static_cast<size_t>(ids(i)));
     }
-    //! i = divide(id, n), j = remainder(id, n) for correspondence i->j
-    //! value is the strength of the correspondence (-1 <= z_{ij} <= 1, closer to 1
+    //! i = divide(id, n+1), j = remainder(id, n+1) for correspondence i->j
+    //! value is the strength of the correspondence (0 <= z_{ij} <= 1, closer to 1
     //! is better)
     for (auto const & c : corr_ids) {
-        auto key = std::make_pair<size_t, size_t>(c / n, c % n);
-        auto value = sol_noslack(c);
-        correspondences_[key] = value;
+        auto key = std::make_pair<size_t, size_t>(c / (n+1), c % (n+1));
+        auto value = optimum_(c);
+        std::cout << "Correspondences found: " << key.first << " -> " << key.second << std::endl;
+        if (key.first != m && key.second != n) {
+            correspondences_[key] = value;
+        }
     }
     return;
 }

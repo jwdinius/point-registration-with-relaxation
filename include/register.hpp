@@ -132,7 +132,7 @@ class ConstrainedObjective {
          m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)),
          min_corr_(min_corr) {
          weights_ = generate_weight_tensor(source_pts, target_pts, config);
-         n_constraints_ = m_ + n_ + 1;
+         n_constraints_ = m_ + n_ + 2;
      }
 
      /** ConstrainedObjective::~ConstrainedObjective()
@@ -182,10 +182,10 @@ class ConstrainedObjective {
       * @brief get size of state vector for optimization objective
       *
       * @param[in]
-      * @return (m_ + 1)*n_
+      * @return (m_ + 1)*(n_ + 1)
       * @note includes slack variables
       */
-     size_t const state_length() const noexcept { return (m_ + 1) * n_; }
+     size_t const state_length() const noexcept { return (m_ + 1) * (n_ + 1); }
 
      /** ConstrainedObjective::get_weight_tensor()
       * @brief get weight_tensor
