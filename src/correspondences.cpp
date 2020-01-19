@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+//! dependency headers
 #include <cppad/ipopt/solve.hpp>
 #include <ortools/linear_solver/linear_solver.h>  // NOLINT [build/include_order]
-
+//! project headers
 #include "correspondences/correspondences.hpp"
 
 //! namespaces

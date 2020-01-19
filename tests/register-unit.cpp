@@ -7,7 +7,7 @@
 //! boost boilerplate
 #define BOOST_TEST_MODULE TestRegistration test
 #include <boost/test/unit_test.hpp>
-//! unit-under-test header
+//! project headers
 #include "correspondences/correspondences.hpp"
 #include "registration/registration.hpp"
 

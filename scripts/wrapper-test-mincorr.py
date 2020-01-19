@@ -6,7 +6,7 @@ from pyregistration import PythonRegistration, PythonConfig
 if __name__ == "__main__":
     m, n = 7, 15
     noise_val = 0.0
-    make_ut_data = True
+    make_ut_data = False
     run_optimization = False
     make_plots = True
 

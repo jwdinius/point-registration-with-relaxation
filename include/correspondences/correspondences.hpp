@@ -1,10 +1,11 @@
 #pragma once
+//! c/c++ headers
 #include <cmath>
 #include <memory>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
-
+//! dependency headers
 #include <armadillo>
 #include <boost/functional/hash.hpp>
 #include <cppad/cppad.hpp>

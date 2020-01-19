@@ -4,8 +4,8 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
-
-//! module-level headers
+//! dependency headers
+//! project headers
 #include "registration/registration.hpp"
 
 namespace cor = correspondences;

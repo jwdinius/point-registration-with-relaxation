@@ -1,6 +1,8 @@
 #pragma once
+//! c/c++ headers
+//! dependency headers
 #include <armadillo>
-
+//! project headers
 #include "correspondences/correspondences.hpp"
 
 namespace registration {
