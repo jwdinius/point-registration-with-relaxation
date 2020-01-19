@@ -7,7 +7,7 @@ if __name__ == "__main__":
     m, n = 7, 15
     noise_val = 0.0
     make_ut_data = False
-    run_optimization = False
+    run_optimization = True
     make_plots = True
 
     np.random.seed(seed=11011)
