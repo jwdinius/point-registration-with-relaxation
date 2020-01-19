@@ -11,6 +11,7 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 find_package(Armadillo REQUIRED)
+find_package(MLPACK REQUIRED)
 find_package(Boost COMPONENTS system filesystem unit_test_framework python REQUIRED)
 find_package(PythonLibs 2.7 REQUIRED)
 find_package(nlohmann_json 3.7.0 REQUIRED)
@@ -24,6 +25,7 @@ add_definitions(-DUSE_GLOP)
 
 include_directories(
     ${ARMADILLO_INCLUDE_DIRS}
+    ${MLPACK_INCLUDE_DIRS}
     ${CPPAD_INCLUDE_DIRS}
     ${IPOPT_INCLUDE_DIRS}
     ${NLOHMANN_JSON_INCLUDE_INSTALL_DIR}
@@ -35,7 +37,7 @@ include_directories(
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
 add_library(registration SHARED src/registration.cpp src/correspondences.cpp)
-target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES}
+target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES} ${MLPACK_LIBRARIES}
     ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${ORTOOLS_LIBRARIES})
 
 add_library(pyregistration SHARED src/python-wrapper.cpp)
@@ -46,10 +48,18 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/__init__.py "__all__ = ['pyregistration']
 
 enable_testing()
 
-add_executable(register-test tests/register-unit.cpp)
-target_link_libraries(register-test ${Boost_FILESYSTEM_LIBRARY}
+add_executable(registration-test tests/registration-unit.cpp)
+target_link_libraries(registration-test ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     registration
 )
-add_test(RegistrationTest register-test)
+add_test(RegistrationTest registration-test)
+
+add_executable(transform-test tests/transform-unit.cpp)
+target_link_libraries(transform-test ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
+    registration
+)
+add_test(TransformTest transform-test)
