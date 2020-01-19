@@ -1,4 +1,4 @@
-FROM nvidia/opengl:1.0-glvnd-runtime-ubuntu16.04
+FROM nvidia/opengl:1.0-glvnd-runtime-ubuntu18.04
 
 # NOTE: build this image from dir above Dockerfile location
 # USE BASH
@@ -37,6 +37,13 @@ RUN wget http://sourceforge.net/projects/arma/files/armadillo-9.700.2.tar.xz \
     && tar -xf armadillo-9.700.2.tar.xz
 RUN cd armadillo-9.700.2 && cmake . && make -j2 && make install
 
+# INSTALL MLPACK
+RUN wget https://www.mlpack.org/files/mlpack-3.1.1.tar.gz \
+    && tar -xzf mlpack-3.1.1.tar.gz
+RUN cd mlpack-3.1.1 && mkdir build && cd build \
+    && cmake -DDEBUG=OFF -DPROFILE=OFF -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF .. \
+    && make -j2 && make install
+
 # INSTALL NLOHMANN_JSON (downloaded from github)
 RUN wget https://github.com/nlohmann/json/archive/v3.7.0.zip \
     && unzip v3.7.0.zip
@@ -46,9 +53,9 @@ RUN cd json* && mkdir build && cd build \
 
 # INSTALL OR-TOOLS (from binary)
 RUN apt-get install -y zlib1g-dev
-RUN wget https://github.com/google/or-tools/releases/download/v7.3/or-tools_ubuntu-16.04_v7.3.7083.tar.gz \
-    && tar -xvf or-tools_ubuntu-16.04_v7.3.7083.tar.gz
-ENV ORTOOLS_ROOT=/or-tools_Ubuntu-16.04-64bit_v7.3.7083
+RUN wget https://github.com/google/or-tools/releases/download/v7.4/or-tools_ubuntu-18.04_v7.4.7247.tar.gz \
+    && tar -xvf or-tools_ubuntu-18.04_v7.4.7247.tar.gz
+ENV ORTOOLS_ROOT=/or-tools_Ubuntu-18.04-64bit_v7.4.7247
 
 # INSTALL NUMPY
 RUN pip install --no-cache-dir numpy==1.16.2
@@ -67,8 +74,6 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 USER $username
 WORKDIR /home/$username
-
-RUN mkdir -p /home/$username/workspace
 
 # nvidia-container-runtime
 ENV NVIDIA_VISIBLE_DEVICES \
