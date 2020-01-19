@@ -2,8 +2,11 @@
 #include <boost/python.hpp>
 #include <armadillo>
 
-#include "register.hpp"
+#include "correspondences/correspondences.hpp"
+#include "registration/registration.hpp"
 
+namespace cor = correspondences;
+namespace reg = registration;
 namespace boopy = boost::python;
 
 /** @struct PyConfig
@@ -53,7 +56,7 @@ struct PythonRegistration {
             }
         }
 
-        Config config;
+        cor::Config config;
         config.epsilon = pyConfig.epsilon;
         config.pairwise_dist_threshold = pyConfig.pairwiseDistThreshold;
         config.corr_threshold = pyConfig.corrThreshold;
@@ -61,10 +64,10 @@ struct PythonRegistration {
 
         //! setup main call
         arma::colvec optimum;
-        PointRegRelaxation::correspondences_t correspondences;
+        cor::PointRegRelaxation::correspondences_t correspondences;
         arma::mat44 H;
         //! and make the main call
-        registration(source_pts, target_pts, config, minCorr, optimum, correspondences, H);
+        reg::registration(source_pts, target_pts, config, minCorr, optimum, correspondences, H);
         //! unpack and wrap output
         for (auto const & c : correspondences) {
             auto const key = boopy::make_tuple<int, int>(c.first.first, c.first.second);
