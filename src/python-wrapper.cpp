@@ -2,8 +2,11 @@
 #include <boost/python.hpp>
 #include <armadillo>
 
-#include "register.hpp"
+#include "correspondences/correspondences.hpp"
+#include "registration/registration.hpp"
 
+namespace cor = correspondences;
+namespace reg = registration;
 namespace boopy = boost::python;
 
 /** @struct PyConfig
@@ -31,12 +34,14 @@ struct PythonRegistration {
       * @param[in] targetPts distribution of (columnar) target points, as python list
       * @param[in] pyConfig `PyConfig` instance with desired optimization parameters;
       *                     see `PyConfig` and `Config` definitions
+      * @param[in] min_corr minimum no. of correspondences to identify between source and
+      *                     point sets
       * @return
       *
       * @note the optimization is performed when the constructor is called
       */
     PythonRegistration(boopy::list const & srcPts, boopy::list const & tgtPts,
-            PythonConfig const & pyConfig) {
+            PythonConfig const & pyConfig, size_t const & minCorr) {
         arma::mat source_pts(boopy::len(srcPts), boopy::len(srcPts[0]));
         for (size_t i = 0; i < source_pts.n_rows; ++i) {
             for (size_t j = 0; j < source_pts.n_cols; ++j) {
@@ -51,7 +56,7 @@ struct PythonRegistration {
             }
         }
 
-        Config config;
+        cor::Config config;
         config.epsilon = pyConfig.epsilon;
         config.pairwise_dist_threshold = pyConfig.pairwiseDistThreshold;
         config.corr_threshold = pyConfig.corrThreshold;
@@ -59,10 +64,10 @@ struct PythonRegistration {
 
         //! setup main call
         arma::colvec optimum;
-        PointRegRelaxation::correspondences_t correspondences;
+        cor::PointRegRelaxation::correspondences_t correspondences;
         arma::mat44 H;
         //! and make the main call
-        registration(source_pts, target_pts, config, optimum, correspondences, H);
+        reg::registration(source_pts, target_pts, config, minCorr, optimum, correspondences, H);
         //! unpack and wrap output
         for (auto const & c : correspondences) {
             auto const key = boopy::make_tuple<int, int>(c.first.first, c.first.second);
@@ -117,7 +122,7 @@ BOOST_PYTHON_MODULE(pyregistration) {
         .def_readwrite("doWarmStart", &PythonConfig::doWarmStart);
     
     //! expose PyRegistration - NOTE: no default constructor is defined/exposed
-    class_<PythonRegistration>("PythonRegistration", init<boopy::list, boopy::list, PythonConfig>())
+    class_<PythonRegistration>("PythonRegistration", init<boopy::list, boopy::list, PythonConfig, size_t>())
         .def_readonly("optimum", &PythonRegistration::optimum_)
         .def_readonly("correspondences", &PythonRegistration::correspondences_)
         .def_readonly("transform", &PythonRegistration::H_);

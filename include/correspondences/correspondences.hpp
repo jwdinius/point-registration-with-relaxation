@@ -10,6 +10,7 @@
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
 
+namespace correspondences {
 /** @struct Config
  * @brief configuration parameters for optimization algorithm 
  * @var Config::epsilon
@@ -25,24 +26,9 @@
 struct Config {
     Config() :
         epsilon(1e-1), pairwise_dist_threshold(1e-1),
-        corr_threshold(0.5), do_warm_start(true) { }
+        corr_threshold(0.5), do_warm_start(false) { }
     double epsilon, pairwise_dist_threshold, corr_threshold;
     bool do_warm_start;
-};
-
-/** @enum Status
- * @brief optimizer termination status definitions
- * @var Status::BadInput
- * termination criteria when input is inconsistent with functional requirements; see `registration` definition
- * @var Status::SolverFailed
- * termination criteria when IPOPT failed to converge (for any reason) to an optimum
- * @var Status::Success
- * termination criteria when full registration pipeline executed successfully
- */
-enum class Status {
-    BadInput,
-    SolverFailed,
-    Success
 };
 
 /** @typedef WeightKey_t
@@ -98,6 +84,18 @@ struct key_equal : public std::binary_function<WeightKey_t, WeightKey_t, bool> {
 using WeightTensor = std::unordered_map<WeightKey_t, double, key_hash, key_equal>;
 
 /**
+ * @brief compute pairwise consistency score; see Eqn. 49 from reference
+ *
+ * @param [in] si ith point in source distribution
+ * @param [in] tj jth point in target distribution
+ * @param [in] sk kth point in source distribution
+ * @param [in] tl lth point in target distribution
+ * @return pairwise consistency score for (i, j, k, l)
+ */
+double consistency(arma::vec3 const & si, arma::vec3 const & tj, arma::vec3 const & sk,
+        arma::vec3 const & tl) noexcept;
+
+/**
  * @brief populate weight tensor for optimization problem; see `w` in Eqn. 48 from paper
  *
  * @param[in] source_pts distribution of (columnar) source points
@@ -124,13 +122,15 @@ class ConstrainedObjective {
       * @param[in] source_pts distribution of (columnar) source points
       * @param[in] target_pts distribution of (columnar) target points
       * @param[in] config `Config` instance with optimization parameters; see `Config` definition
+      * @param[in] min_corr minimum number of corresondences required
       * @return
       */
      explicit ConstrainedObjective(arma::mat const & source_pts,
-             arma::mat const & target_pts, Config const & config) :
-         m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)) {
+             arma::mat const & target_pts, Config const & config, size_t const & min_corr) :
+         m_(static_cast<size_t>(source_pts.n_cols)), n_(static_cast<size_t>(target_pts.n_cols)),
+         min_corr_(min_corr) {
          weights_ = generate_weight_tensor(source_pts, target_pts, config);
-         n_constraints_ = m_ + n_ + 1;
+         n_constraints_ = m_ + n_ + 2;
      }
 
      /** ConstrainedObjective::~ConstrainedObjective()
@@ -174,14 +174,22 @@ class ConstrainedObjective {
       */
      size_t const num_target_pts() const noexcept { return n_; }
      
+     /** ConstrainedObjective::num_min_corr()
+      * @brief return minimum number of correspondences for optimization objective
+      *
+      * @param[in]
+      * @return copy of private member `min_corr_`
+      */
+     size_t const num_min_corr() const noexcept { return min_corr_; }
+     
      /** ConstrainedObjective::state_length()
       * @brief get size of state vector for optimization objective
       *
       * @param[in]
-      * @return (m_ + 1)*n_
+      * @return (m_ + 1)*(n_ + 1)
       * @note includes slack variables
       */
-     size_t const state_length() const noexcept { return (m_ + 1) * n_; }
+     size_t const state_length() const noexcept { return (m_ + 1) * (n_ + 1); }
 
      /** ConstrainedObjective::get_weight_tensor()
       * @brief get weight_tensor
@@ -193,7 +201,7 @@ class ConstrainedObjective {
 
  private:
      WeightTensor weights_;
-     size_t m_, n_, n_constraints_;
+     size_t m_, n_, min_corr_, n_constraints_;
 };
 
 /** @class PointRegRelaxation
@@ -250,8 +258,9 @@ class PointRegRelaxation {
       * @return
       */
      explicit PointRegRelaxation(arma::mat const & source_pts,
-             arma::mat const & target_pts, Config const & config) : config_(config) {
-         ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config);
+             arma::mat const & target_pts, Config const & config,
+             size_t const & min_corr) : config_(config) {
+         ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config, min_corr);
          optimum_.resize(ptr_obj_->state_length());
      }
      
@@ -305,38 +314,26 @@ class PointRegRelaxation {
      correspondences_t const get_correspondences() const noexcept { return correspondences_; }
 
  private:
-     std::unique_ptr<ConstrainedObjective> ptr_obj_;
      Config config_;
+     std::unique_ptr<ConstrainedObjective> ptr_obj_;
      correspondences_t correspondences_;
      arma::colvec optimum_; 
 };
 
 /**
- * @brief run full registration pipeline 
+ * @brief Find vector x that minimizes inner product <c, x> subject to bounds constraints
+ * lb <= x <= ub and equality constraint A*x==b
  *
- * @param [in] src_pts points to transform
- * @param [in] dst_pts target points
- * @param [in] config `Config` instance with optimization parameters; see `Config` definition
- * @param [in][out] optimum optimum for constrained objective identified by IPOPT
- * @param [in][out] correspondences pairwise correspondences identified between source and target point sets
- * @param [in][out] H_optimal best-fit transformation to align points in homogeneous coordinates
- * @return solver status; see `Status` enum definition
- *
- * @note src_pts and dst_pts must have the same number of columns
- * @note see original reference, available at https://www.sciencedirect.com/science/article/pii/S1077314208000891
- */
-Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config, arma::colvec & optimum, PointRegRelaxation::correspondences_t & correspondences,
-    arma::mat44 & H_optimal) noexcept;
-
-/**
- * @brief Identify best transformation between two sets of points with known correspondences 
- *
- * @param [in] src_pts points to transform
- * @param [in] dst_pts target points
- * @param [in][out] H_optimal best-fit transformation to align points in homogeneous coordinates
+ * @param [in] c vector c in <c, x> above
+ * @param [in] A matrix A in Ax==b above
+ * @param [in] b vector b in Ax==b above
+ * @param [in] lower_bound lower bound on (individual components of) x
+ * @param [in] upper_bound upper bound on (individual components of) x
+ * @param [in][out] x_opt value of x that minimizes <c, x> subject to defined constraints
  * @return
  *
- * @note src_pts and dst_pts must have the same number of columns
+ * @note Uses Google's ORTools
  */
-void best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 & H_optimal) noexcept;
+bool linear_programming(arma::colvec const & c, arma::mat const & A, arma::colvec const & b,
+        double const & lower_bound, double const & upper_bound, arma::colvec & x_opt) noexcept;
+};

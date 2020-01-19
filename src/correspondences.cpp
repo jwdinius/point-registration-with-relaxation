@@ -10,11 +10,13 @@
 #include <vector>
 
 #include <cppad/ipopt/solve.hpp>
-#include "register.hpp"
+#include <ortools/linear_solver/linear_solver.h>  // NOLINT [build/include_order]
 
-//! forward declarations to minimize compile time
-class ConstrainedObjective;
-class PointRegRelaxation;
+#include "correspondences/correspondences.hpp"
+
+//! namespaces
+namespace gor = operations_research;  // from ORTools
+namespace cor = correspondences;
 
 /**
  * @brief compute pairwise consistency score; see Eqn. 49 from reference
@@ -25,7 +27,7 @@ class PointRegRelaxation;
  * @param [in] tl lth point in target distribution
  * @return pairwise consistency score for (i, j, k, l)
  */
-double consistency(arma::vec3 const & si, arma::vec3 const & tj, arma::vec3 const & sk,
+double cor::consistency(arma::vec3 const & si, arma::vec3 const & tj, arma::vec3 const & sk,
         arma::vec3 const & tl) noexcept {
     double const dist_si_to_sk = arma::norm(si - sk, 2);
     double const dist_tj_to_tl = arma::norm(tj - tl, 2);
@@ -40,8 +42,8 @@ double consistency(arma::vec3 const & si, arma::vec3 const & tj, arma::vec3 cons
  * @param [in] config `Config` instance with optimization parameters; see `Config` definition
  * @return weight tensor for optimization objective; `w_{ijkl}` from reference
  */
-WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config) noexcept {
+cor::WeightTensor cor::generate_weight_tensor(arma::mat const & source_pts, arma::mat const & target_pts,
+    cor::Config const & config) noexcept {
     WeightTensor weight = {};
     auto const & eps = config.epsilon;
     auto const & pw_thresh = config.pairwise_dist_threshold;
@@ -69,53 +71,89 @@ WeightTensor generate_weight_tensor(arma::mat const & source_pts, arma::mat cons
 }
 
 /**
- * @brief Identify best transformation between two sets of points with known correspondences 
+ * @brief Find vector x that minimizes inner product <c, x> subject to bounds constraints
+ * lb <= x <= ub and equality constraint A*x==b
  *
- * @param [in] src_pts points to transform
- * @param [in] dst_pts target points
- * @param [in][out] H_optimal best-fit transformation to align points in homogeneous coordinates
+ * @param [in] c vector c in <c, x> above
+ * @param [in] A matrix A in Ax==b above
+ * @param [in] b vector b in Ax==b above
+ * @param [in] lower_bound lower bound on (individual components of) x
+ * @param [in] upper_bound upper bound on (individual components of) x
+ * @param [in][out] x_opt value of x that minimizes <c, x> subject to defined constraints
  * @return
  *
- * @note src_pts and dst_pts must have the same number of columns
+ * @note Uses Google's ORTools
  */
-void best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 & H_optimal) noexcept {
-    arma::mat33 optimal_rot;
-    arma::vec3 optimal_trans;
+bool cor::linear_programming(arma::colvec const & c, arma::mat const & A, arma::colvec const & b,
+        double const & lower_bound, double const & upper_bound, arma::colvec & x_opt) noexcept {
+    //! check correct size
+    if (c.n_rows != A.n_cols) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": First and third arguments must have the same number of columns" << std::endl;
+        return false;
+    } else if (b.n_rows != A.n_rows) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": Second and third arguments must have the same number of columns" << std::endl;
+        return false;
+    } else if (c.n_rows != x_opt.n_rows) {
+        std::cout << static_cast<std::string>(__func__)
+            << ": First and sixth arguments must have the same number of columns" << std::endl;
+        return false;
+    }
 
-    //! make const ref to size
-    size_t const & n_pts = src_pts.n_cols;
+    //! overwrite x_opt with infeasible values
+    auto const infeasible_val = lower_bound - 1.;
+    x_opt.fill(infeasible_val);
 
-    //! compute weighted centroids
-    arma::vec3 const src_centroid = arma::vec3(arma::mean(src_pts, 1));
-    arma::vec3 const dst_centroid = arma::vec3(arma::mean(dst_pts, 1));
+    //! setup solver
+    gor::MPSolver solver("NULL", gor::MPSolver::GLOP_LINEAR_PROGRAMMING);
+    std::vector<gor::MPVariable*> opt_sol;
+    gor::MPObjective* const objective = solver.MutableObjective();
 
-    //! translate centroid to origin
-    //! - Note the use of the decrement operator: this is why the function signature uses pass by value, not ref
-    arma::mat const src_crep = arma::repmat(src_centroid, 1, n_pts);
-    arma::mat const dst_crep = arma::repmat(dst_centroid, 1, n_pts);
-    src_pts -= src_crep;
-    dst_pts -= dst_crep;
+    //! setup optimal solution array: lower_bound le xi le upper_bound for all 0 le i lt size
+    solver.MakeNumVarArray(/* size */ c.n_rows,
+            /* lb */ lower_bound,
+            /* ub */ upper_bound,
+            /* name prefix */ "X",
+            /* opt var ref */ &opt_sol);
 
-    //! compute tensor product
-    arma::mat33 const C = arma::mat33(src_pts * dst_pts.t());
+    //! c.t * x
+    for (size_t i = 0; i < c.n_rows; ++i) {
+        objective->SetCoefficient(opt_sol[i], c(i));
+    }
 
-    //! compute the singular value decomposition
-    arma::mat33 U, V;
-    arma::vec3 s;
-    arma::svd(U, s, V, C);
+    //! minimization is the goal : min c.t * x
+    objective->SetMinimization();
 
-    //! compute optimal rotation and translation
-    arma::mat33 I(arma::fill::eye);
-    if (arma::det(U * V.t()) < 0)
-        I(2, 2) *= -1;
-    optimal_rot = V * I * U.t();
-    optimal_trans = dst_centroid - optimal_rot * src_centroid;
+    //! constraints: A*x le b
+    std::vector<gor::MPConstraint*> constraints;
+    for (size_t i = 0; i < A.n_rows; ++i) {
+        constraints.push_back( solver.MakeRowConstraint( /* lower bound */ -solver.infinity(),
+                    /* upper bound */ b(i) ) );
+        for (size_t j = 0; j < A.n_cols; ++j) {
+            constraints.back()->SetCoefficient(opt_sol[j], A(i, j));
+        }
+    }
 
-    H_optimal.zeros();
-    H_optimal(arma::span(0, 2), arma::span(0, 2)) = optimal_rot;
-    H_optimal(arma::span(0, 2), 3) = optimal_trans;
-    H_optimal(3, 3) = 1;
-    return;
+    //! find the optimal value
+    // XXX if this is too slow, set no. of threads to be > 1 with solver.setNumThreads
+    gor::MPSolver::ResultStatus const result_status = solver.Solve();
+    //! check solution
+    if (result_status != gor::MPSolver::OPTIMAL) {
+        LOG(INFO) << "The problem does not have an optimal solution!";
+        if (result_status == gor::MPSolver::FEASIBLE) {
+            LOG(INFO) << "A potentially suboptimal solution was found";
+        } else {
+            LOG(INFO) << "The solver could not solve the problem.";
+        }
+        return false;
+    }
+
+    //! solver was successful - write output and return true
+    for (size_t i = 0; i < x_opt.n_rows; ++i) {
+        x_opt(i) = opt_sol[i]->solution_value();
+    }
+    return true;
 }
 
 /** ConstrainedObjective::~ConstrainedObjective()
@@ -126,7 +164,7 @@ void best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 & H_op
  *
  * @note nothing to do; resources are automatically deallocated
  */
-ConstrainedObjective::~ConstrainedObjective() { }
+cor::ConstrainedObjective::~ConstrainedObjective() { }
 
 /** ConstrainedObjective::operator()
  * @brief operator overload for IPOPT
@@ -135,8 +173,8 @@ ConstrainedObjective::~ConstrainedObjective() { }
  * @param[in] z point for evaluation
  * return
  */
-void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
-        ConstrainedObjective::ADvector const & z) noexcept {
+void cor::ConstrainedObjective::operator()(cor::ConstrainedObjective::ADvector &fgrad,
+        cor::ConstrainedObjective::ADvector const & z) noexcept {
     size_t curr_idx = 0;
     //! objective value
     fgrad[curr_idx] = 0.;
@@ -147,8 +185,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
                     if (i != k && j != l) {
                         WeightKey_t const key = std::make_tuple(i, j, k, l);
                         if (weights_.find(key) != weights_.end()) {
-                            //! remove the 1/2 from each term, since minimum is invariant under scaling
-                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * (z[i*n_ + j] + 1.) * (z[k*n_ + l] + 1.);
+                            fgrad[curr_idx] += static_cast<CppAD::AD<double>>(weights_[key]) * z[i*(n_+1) + j] * z[k*(n_+1) + l];
                         }
                     }
                 }
@@ -156,27 +193,32 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
         }
     }
 
-    //! constraints (see paper):
-    //! 1) Each source point should be mapped to a target point
+    //! constraints:
     for (size_t i = 0; i < m_; ++i) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(n_) - 2.;
-        for (size_t j = 0; j < n_; ++j) {
-            fgrad[curr_idx] += z[i*n_ + j];
+        ++curr_idx;
+        for (size_t j = 0; j <= n_; ++j) {
+            fgrad[curr_idx] += z[i*(n_+1) + j];
         }
     }
 
-    //! 2) Two source points cannot be mapped to the same target point
-    fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(2*m_) - static_cast<CppAD::AD<double>>(n_);
+    ++curr_idx;
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[curr_idx] += z[m_*n_ + j];
+        fgrad[curr_idx] += z[m_*(n_+1) + j];
     }
 
     for (size_t j = 0; j < n_; ++j) {
-        fgrad[++curr_idx] = static_cast<CppAD::AD<double>>(m_) - 1.;
+        ++curr_idx;
         for (size_t i = 0; i <= m_; ++i) {
-            fgrad[curr_idx] += z[i*n_ + j];
+            fgrad[curr_idx] += z[i*(n_+1) + j];
         }
     }
+
+    ++curr_idx;
+    for (size_t i = 0; i < m_; ++i) {
+        fgrad[curr_idx] += z[i*(n_+1) + n_];
+    }
+
+
 }
 
 /** PointRegRelaxation::~PointRegRelaxation()
@@ -187,7 +229,7 @@ void ConstrainedObjective::operator()(ConstrainedObjective::ADvector &fgrad,
  *
  * @note nothing to do; resources are automatically deallocated
  */
-PointRegRelaxation::~PointRegRelaxation() { }
+cor::PointRegRelaxation::~PointRegRelaxation() { }
 
 /** PointRegRelaxation::warm_start
  * @brief compute feasible initial starting point for optimization based on correspondence weights
@@ -197,7 +239,7 @@ PointRegRelaxation::~PointRegRelaxation() { }
  *
  * @note see implementation for algorithm details
  */
-void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept {
+void cor::PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept {
     //! look at weights and assign initial associations as those that are most likely
     auto const & weights = ptr_obj_->get_weight_tensor();
     std::map<double, WeightKey_t> swapped_map;
@@ -252,16 +294,16 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
     //! and slack-variables to 1.0 (again, no correspondence)
     for (size_t i = 0; i < state_length; ++i)
         // when i < m+1, assume no association
-        if (i < (m-1)*n + n) {
-            z[i] = -1.0;
+        if (i < (m-1)*(n+1) + n) {
+            z[i] = 0.0;
         } else { 
             z[i] = 1.0;
         }
     //! overwrite values at indices associated with best correspondence score
     //! NOTE: this obeys equality constraints
     for (auto const & a : assocs) {
-        z[a.first * n + a.second] = 1.0;
-        z[m*n + a.second] = -1.0;
+        z[a.first * (n+1) + a.second] = 1.0;
+        z[m * (n+1) + a.second] = 0.0;
     }
 
     return;
@@ -276,7 +318,10 @@ void PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept
  *
  * @note see Eqn. 48 in paper and subsequent section for details
  */
-PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
+cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
+    auto const & n = ptr_obj_->num_target_pts();
+    auto const & k = ptr_obj_->num_min_corr();
     auto const & n_vars = ptr_obj_->state_length();
     auto const & n_constraints = ptr_obj_->num_constraints();
 
@@ -286,21 +331,33 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
         warm_start(z);
     }
 
-    //! setup inequality constraints on variables: -1 <= z_{ij} <= 1 for all i,j
+    //! setup inequality constraints on variables: 0 <= z_{ij} <= 1 for all i,j
     Dvec z_lb(n_vars);
     Dvec z_ub(n_vars);
     for (size_t i = 0; i < n_vars; ++i) {
-        z_lb[i] = -1.;
+        z_lb[i] = 0.;
         z_ub[i] = 1.;
     }
+    //! overwrite last value to avoid checking conditional for all iterations
+    z_ub[n_vars-1] = 0.;
 
-    //! setup equality constraints g_i(z) == 0
+    //! setup constraints l_i <= g_i(z) <= u_i
     Dvec constraints_lb(n_constraints);
     Dvec constraints_ub(n_constraints);
-    for (size_t i = 0; i < n_constraints; ++i) {
-        constraints_lb[i] = 0.;
-        constraints_ub[i] = 0.;
+    size_t ctr = 0;
+    for (size_t i = 0; i < m; ++i) {
+        constraints_lb[ctr] = 1.;
+        constraints_ub[ctr++] = 1.;
     }
+    
+    constraints_lb[ctr] = n - m;
+    constraints_ub[ctr++] = n - k;
+    for (size_t j = 0; j < n; ++j) {
+        constraints_lb[ctr] = 1.;
+        constraints_ub[ctr++] = 1.;
+    }
+    constraints_lb[ctr] = m - k;
+    constraints_ub[ctr] = m - k;
 
     //! options for IPOPT solver
     std::string options;
@@ -344,73 +401,31 @@ PointRegRelaxation::status_t PointRegRelaxation::find_optimum() noexcept {
  * @param[in]
  * @return
  */
-void PointRegRelaxation::find_correspondences() noexcept {
+void cor::PointRegRelaxation::find_correspondences() noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
     auto const & n = ptr_obj_->num_target_pts();
-    auto const & n_vars = ptr_obj_->state_length();
 
-    //! remove slack variables
-    arma::colvec sol_noslack = optimum_(arma::span(0, n_vars - n - 1)); 
-    //! find indices of valid correspondences i->j
-    arma::uvec const ids = arma::find(sol_noslack > config_.corr_threshold);
+    //! remove slack variables (uses column-wise vectorization for speed, see Armadillo docs, #vectorise)
+    /*arma::mat opt_colwise = arma::reshape(optimum_, m + 1, n + 1);
+    arma::colvec sol_noslack = arma::vectorise( opt_colwise( arma::span(0, m-1), arma::span(0, n-1) ) );*/ 
+
+    //XXX(jwd) - this is a hack, for the time being, need to get ORtools projection to permutation matrix yada yada
+    // working
+    //! find k best correspondences i->j
+    arma::uvec const ids = arma::find(optimum_ > config_.corr_threshold);  // XXX(jwd) this should be done with ORtools
     std::list<size_t> corr_ids;
     for (size_t i = 0; i < ids.n_elem; ++i) {
         corr_ids.emplace_back(static_cast<size_t>(ids(i)));
     }
-    //! i = divide(id, n), j = remainder(id, n) for correspondence i->j
-    //! value is the strength of the correspondence (-1 <= z_{ij} <= 1, closer to 1
+    //! i = divide(id, n+1), j = remainder(id, n+1) for correspondence i->j
+    //! value is the strength of the correspondence (0 <= z_{ij} <= 1, closer to 1
     //! is better)
     for (auto const & c : corr_ids) {
-        auto key = std::make_pair<size_t, size_t>(c / n, c % n);
-        auto value = sol_noslack(c);
-        correspondences_[key] = value;
+        auto key = std::make_pair<size_t, size_t>(c / (n+1), c % (n+1));
+        auto value = optimum_(c);
+        if (key.first != m && key.second != n) {
+            correspondences_[key] = value;
+        }
     }
     return;
-}
-
-/**
- * @brief run full registration pipeline 
- *
- * @param [in] src_pts points to transform
- * @param [in] dst_pts target points
- * @param [in] config `Config` instance with optimization parameters; see `Config` definition
- * @param [in][out] optimum optimum for constrained objective identified by IPOPT
- * @param [in][out] correspondences pairwise correspondences identified between source and target point sets
- * @param [in][out] H_optimal best-fit transformation to align points in homogeneous coordinates
- * @return solver status; see `Status` enum definition
- *
- * @note this is the main functional interface to this library
- * @note src_pts and dst_pts must have the same number of columns
- * @note see original reference, available at https://www.sciencedirect.com/science/article/pii/S1077314208000891
- */
-Status registration(arma::mat const & source_pts, arma::mat const & target_pts,
-    Config const & config, arma::colvec & optimum, PointRegRelaxation::correspondences_t & correspondences,
-    arma::mat44 & H_optimal) noexcept {
-    if (source_pts.n_cols >= target_pts.n_cols) {
-        std::cout << "no. of source pts must be less than no. of target pts" << std::endl;
-        return Status::BadInput;
-    }
-    auto ptr_optmzr_obj = std::make_unique<PointRegRelaxation>(source_pts, target_pts, config);
-
-    if (ptr_optmzr_obj->find_optimum() != PointRegRelaxation::status_t::success) {
-        return Status::SolverFailed;
-    }
-    ptr_optmzr_obj->find_correspondences();
-
-    correspondences = ptr_optmzr_obj->get_correspondences();
-    arma::uvec src_inds(correspondences.size()), tgt_inds(correspondences.size());
-    size_t counter = 0;
-    for (const auto & c : correspondences) {
-        src_inds(counter) = c.first.first;
-        tgt_inds(counter++) = c.first.second;
-    }
-
-    //! find transformation
-    arma::mat const source_pts_align = source_pts.cols(src_inds);
-    arma::mat const target_pts_align = target_pts.cols(tgt_inds);
-    best_fit_transform(source_pts_align, target_pts_align, H_optimal);
-
-    optimum = ptr_optmzr_obj->get_optimum();
-    correspondences = ptr_optmzr_obj->get_correspondences();
-
-    return Status::Success;
 }
