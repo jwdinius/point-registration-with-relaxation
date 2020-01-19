@@ -6,8 +6,8 @@ from pyregistration import PythonRegistration, PythonConfig
 if __name__ == "__main__":
     m, n = 7, 15
     noise_val = 0.0
-    make_ut_data = False
-    run_optimization = True
+    make_ut_data = True
+    run_optimization = False
     make_plots = True
 
     np.random.seed(seed=11011)
@@ -38,15 +38,12 @@ if __name__ == "__main__":
     source_pts = np.hstack((source_pts, source_pts_aug))
     src_to_tgt = np.linalg.inv(tgt_to_src)
     
-    print("#####")
-    print(correspondences.tolist())
-    print("#####")
-    
     if make_ut_data:
         data = {"source_pts": source_pts[:3, :].tolist(),
                 "target_pts": target_pts[:3, :].tolist(),
                 "correspondences": correspondences.tolist(),
-                "src_to_tgt": src_to_tgt.tolist()}
+                "src_to_tgt": src_to_tgt.tolist(),
+                "min_corr": m}
 
         with open('../tests/testdata/registration-data-mincorr.json', 'w') as json_file:
             json.dump(data, json_file)
@@ -100,11 +97,4 @@ if __name__ == "__main__":
             plt.legend()
             plt.title("Source Points Realigned")
             
-            plt.figure()
-            plt.plot(target_pts[0, :], target_pts[1, :], 'o', label="target")
-            plt.plot(source_pts_xform_true[0, :], source_pts_xform_true[1, :], 'r.', label="source")
-            plt.xlabel("x")
-            plt.ylabel("y")
-            plt.legend()
-            plt.title("Source Points Realigned (truth)")
             plt.show()

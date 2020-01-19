@@ -32,10 +32,6 @@ if __name__ == "__main__":
     source_pts[2, :] = 0.
     source_pts[3, :] = 1.
 
-    print("#####")
-    print(correspondences.tolist())
-    print("#####")
-
     if make_ut_data:
         src_to_tgt = np.linalg.inv(tgt_to_src)
         data = {"source_pts": source_pts[:3, :].tolist(),
