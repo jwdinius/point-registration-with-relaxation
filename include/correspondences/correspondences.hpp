@@ -27,7 +27,7 @@ namespace correspondences {
 struct Config {
     Config() :
         epsilon(1e-1), pairwise_dist_threshold(1e-1),
-        corr_threshold(0.5), do_warm_start(false) { }
+        corr_threshold(0.9), do_warm_start(false) { }
     double epsilon, pairwise_dist_threshold, corr_threshold;
     bool do_warm_start;
 };
@@ -305,6 +305,17 @@ class PointRegRelaxation {
       * @return
       */
      arma::colvec const get_optimum() const noexcept { return optimum_; }
+
+     /** PointRegRelaxation::linear_projection
+      * @brief Solve linear assignment problem:
+      *  max c.t()*flatten(X) subject to linear constraints
+      *
+      * @note linear constraints are constructed within the function
+      *
+      * @param [in][out] opt_lp projection of optimal solution onto permutation matrices
+      * @return true if converged, false otherwise
+      */
+     bool linear_projection(arma::colvec & opt_lp) const noexcept;
 
      /** PointRegRelaxation::get_correspondences()
       * @brief get identified correspondences

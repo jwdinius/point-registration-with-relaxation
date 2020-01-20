@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE( full_pipeline_test ) {
     cor::Config config;
     config.epsilon = 0.1;
     config.pairwise_dist_threshold = 0.1;
-    config.corr_threshold = 0.5;
+    config.corr_threshold = 0.9;
     config.do_warm_start = true;
 
     //! source pts

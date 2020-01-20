@@ -54,7 +54,7 @@ target_link_libraries(registration-test ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     registration
 )
-add_test(RegistrationTest registration-test)
+add_test(TestRegistration registration-test)
 
 add_executable(transform-test tests/transform-unit.cpp)
 target_link_libraries(transform-test ${Boost_FILESYSTEM_LIBRARY}
@@ -62,4 +62,12 @@ target_link_libraries(transform-test ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     registration
 )
-add_test(TransformTest transform-test)
+add_test(TestTransformUtils transform-test)
+
+add_executable(correspondences-test tests/correspondences-unit.cpp)
+target_link_libraries(correspondences-test ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
+    registration
+)
+add_test(TestCorrespondenceUtils correspondences-test)

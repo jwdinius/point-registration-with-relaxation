@@ -71,18 +71,18 @@ cor::WeightTensor cor::generate_weight_tensor(arma::mat const & source_pts, arma
 }
 
 /**
- * @brief Find vector x that minimizes inner product <c, x> subject to bounds constraints
- * lb <= x <= ub and equality constraint A*x==b
+ * @brief Finds x that minimizes inner product <c, x> subject to:
+ * (1) bounds constraints lb <= x <= ub, and
+ * (2) equality constraints A*x==b
+ * using Google's ORTools
  *
  * @param [in] c vector c in <c, x> above
  * @param [in] A matrix A in Ax==b above
  * @param [in] b vector b in Ax==b above
- * @param [in] lower_bound lower bound on (individual components of) x
- * @param [in] upper_bound upper bound on (individual components of) x
+ * @param [in] lower_bound (scalar) lower bound on (individual components of) x
+ * @param [in] upper_bound (scalar) upper bound on (individual components of) x
  * @param [in][out] x_opt value of x that minimizes <c, x> subject to defined constraints
  * @return
- *
- * @note Uses Google's ORTools
  */
 bool cor::linear_programming(arma::colvec const & c, arma::mat const & A, arma::colvec const & b,
         double const & lower_bound, double const & upper_bound, arma::colvec & x_opt) noexcept {
@@ -136,7 +136,7 @@ bool cor::linear_programming(arma::colvec const & c, arma::mat const & A, arma::
     }
 
     //! find the optimal value
-    // XXX if this is too slow, set no. of threads to be > 1 with solver.setNumThreads
+    // XXX(jwd) can increase num threads to be > 1 with solver.setNumThreads to speed up computation
     gor::MPSolver::ResultStatus const result_status = solver.Solve();
     //! check solution
     if (result_status != gor::MPSolver::OPTIMAL) {
@@ -144,7 +144,7 @@ bool cor::linear_programming(arma::colvec const & c, arma::mat const & A, arma::
         if (result_status == gor::MPSolver::FEASIBLE) {
             LOG(INFO) << "A potentially suboptimal solution was found";
         } else {
-            LOG(INFO) << "The solver could not solve the problem.";
+            LOG(INFO) << "The solver failed.";
         }
         return false;
     }
@@ -309,6 +309,46 @@ void cor::PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noe
     return;
 }
 
+/** PointRegRelaxation::linear_projection
+ * @brief Solve linear assignment problem:
+ *  max c.t()*flatten(X) subject to linear constraints
+ *
+ * @note linear constraints are constructed within the function
+ *
+ * @param [in][out] opt_lp projection of optimal solution onto permutation matrices
+ * @return true if converged, false otherwise
+ */
+bool cor::PointRegRelaxation::linear_projection(arma::colvec & opt_lp) const noexcept {
+    auto const & m = ptr_obj_->num_source_pts();
+    auto const & n = ptr_obj_->num_target_pts();
+    auto const & n_con = ptr_obj_->num_constraints();
+    auto const & state_len = ptr_obj_->state_length();
+
+    //! make copy of optimum_ (with slack variables)
+    arma::colvec c(optimum_);
+
+    //! negate positive values
+    c.transform( [&](double & val) { return (val < 0) ? static_cast<double>(0) : -val; } );
+
+    arma::mat A(n_con, state_len, arma::fill::zeros);
+    arma::colvec b(n_con, arma::fill::ones);
+
+    //! \sum_i Xi,j = 1
+    for (size_t i = 0; i <= m; ++i) {
+        A(i, arma::span(i*(n+1), (i+1)*(n+1)-1)).fill(1);
+    }
+
+    //! \sum_j Xi,j = 1
+    for (size_t i = m+1; i < n_con; ++i) {
+        for (size_t j = 0; j < state_len; j+=n+1) {
+            A(i, j) = 1;
+        }
+    }
+
+    //! find projection
+    return linear_programming(c, A, b, static_cast<double>(0), static_cast<double>(1), opt_lp);
+}
+
 /** PointRegRelaxation::find_optimum()
  * @brief run IPOPT to find optimum for optimization objective:
  * argmin f(z) subject to constraints g_i(z) == 0, 0 <= i < num_constraints
@@ -391,6 +431,15 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
     for (size_t i = 0; i < n_vars; ++i) {
         optimum_(i) = solution.x[i];
     }
+
+    //! project onto permutation matrices; see Section 3.3 of the SDRSAC paper
+    arma::colvec proj_opt(n_vars);
+    if (!linear_projection(proj_opt)) {
+        std::cout << "Linear projection failed; don't update optimum_" << std::endl;
+    } else {
+        //! overwrite optimum_
+        optimum_ = proj_opt;
+    }
     return status_t::success;
 };
 
@@ -405,24 +454,20 @@ void cor::PointRegRelaxation::find_correspondences() noexcept {
     auto const & m = ptr_obj_->num_source_pts();
     auto const & n = ptr_obj_->num_target_pts();
 
-    //! remove slack variables (uses column-wise vectorization for speed, see Armadillo docs, #vectorise)
-    /*arma::mat opt_colwise = arma::reshape(optimum_, m + 1, n + 1);
-    arma::colvec sol_noslack = arma::vectorise( opt_colwise( arma::span(0, m-1), arma::span(0, n-1) ) );*/ 
-
-    //XXX(jwd) - this is a hack, for the time being, need to get ORtools projection to permutation matrix yada yada
-    // working
-    //! find k best correspondences i->j
-    arma::uvec const ids = arma::find(optimum_ > config_.corr_threshold);  // XXX(jwd) this should be done with ORtools
+    //! find best correspondences i->j (includes slack variables)
+    arma::uvec const ids = arma::find(optimum_ >= config_.corr_threshold);
     std::list<size_t> corr_ids;
     for (size_t i = 0; i < ids.n_elem; ++i) {
         corr_ids.emplace_back(static_cast<size_t>(ids(i)));
     }
+
     //! i = divide(id, n+1), j = remainder(id, n+1) for correspondence i->j
     //! value is the strength of the correspondence (0 <= z_{ij} <= 1, closer to 1
     //! is better)
     for (auto const & c : corr_ids) {
-        auto key = std::make_pair<size_t, size_t>(c / (n+1), c % (n+1));
-        auto value = optimum_(c);
+        auto const key = std::make_pair<size_t, size_t>(c / (n+1), c % (n+1));
+        double const value = optimum_(c);
+        //! discount slack variables
         if (key.first != m && key.second != n) {
             correspondences_[key] = value;
         }
