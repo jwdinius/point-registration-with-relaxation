@@ -46,8 +46,13 @@ target_link_libraries(pyregistration ${BOOST_LIBRARIES} ${PYTHON_LIBRARIES} regi
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/__init__.py "__all__ = ['pyregistration']")
 
-enable_testing()
+# Set up installation targets
+install(FILES include/correspondences/correspondences.hpp DESTINATION include/correspondences)
+install(FILES include/registration/registration.hpp DESTINATION include/registration)
+install(TARGETS registration DESTINATION lib)
+install(TARGETS pyregistration DESTINATION lib/python2.7/dist-packages)
 
+enable_testing()
 add_executable(registration-test tests/registration-unit.cpp)
 target_link_libraries(registration-test ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
