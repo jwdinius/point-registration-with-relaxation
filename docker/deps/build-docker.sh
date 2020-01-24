@@ -1,4 +1,4 @@
 docker build --network=host \
     $1 \
-    -t qap-register \
+    -t nmsac-deps \
     .
