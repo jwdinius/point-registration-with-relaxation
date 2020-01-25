@@ -204,6 +204,10 @@ reg::Status reg::registration(arma::mat const & source_pts, arma::mat const & ta
     auto ptr_optmzr_obj = std::make_unique<cor::PointRegRelaxation>(source_pts, target_pts,
             config, min_corr);
 
+    if (ptr_optmzr_obj->num_consistent_pairs() < config.n_pair_threshold) {
+        return Status::TooFewPairs;
+    }
+
     if (ptr_optmzr_obj->find_optimum() != cor::PointRegRelaxation::status_t::success) {
         return Status::SolverFailed;
     }

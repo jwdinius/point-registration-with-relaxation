@@ -48,6 +48,7 @@ if __name__ == "__main__":
         pc.pairwiseDistThreshold = 0.1
         pc.corrThreshold = 0.9
         pc.doWarmStart = True
+        pc.nPairThreshold = 100
 
         pr = PythonRegistration(source_pts[:3, :].tolist(), target_pts[:3, :].tolist(), pc, source_pts.shape[1])
 

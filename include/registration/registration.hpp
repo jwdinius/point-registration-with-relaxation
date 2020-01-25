@@ -10,6 +10,8 @@ namespace registration {
  * @brief optimizer termination status definitions
  * @var Status::BadInput
  * termination criteria when input is inconsistent with functional requirements; see `registration` definition
+ * @var Status::TooFewPairs
+ * termination criteria when too few pairwise consistencies were found
  * @var Status::SolverFailed
  * termination criteria when IPOPT failed to converge (for any reason) to an optimum
  * @var Status::Success
@@ -17,6 +19,7 @@ namespace registration {
  */
 enum class Status {
     BadInput,
+    TooFewPairs,
     SolverFailed,
     Success
 };

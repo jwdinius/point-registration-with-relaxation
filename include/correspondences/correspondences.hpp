@@ -1,6 +1,7 @@
 #pragma once
 //! c/c++ headers
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <tuple>
 #include <unordered_map>
@@ -20,15 +21,19 @@ namespace correspondences {
  * threshold above which to allow pairwise correspondence; this prevents considering correspondences
  * that may have high ambiguity
  * @var Config::corr_threshold
- * value in optimum solution to declare a correspondence as valid {\in (-1, 1)}
+ * value in optimum solution to declare a correspondence as valid {\in (0, 1)}
+ * @var Config::n_pair_threshold
+ * minimum number of pairwise consistencies 
  * @var Config::do_warm_start
  * flag indicating whether or not to do warm start before optimization
  */
 struct Config {
     Config() :
         epsilon(1e-1), pairwise_dist_threshold(1e-1),
-        corr_threshold(0.9), do_warm_start(false) { }
+        corr_threshold(0.9), n_pair_threshold(std::numeric_limits<size_t>::signaling_NaN()),
+        do_warm_start(false) { }
     double epsilon, pairwise_dist_threshold, corr_threshold;
+    size_t n_pair_threshold;
     bool do_warm_start;
 };
 
@@ -316,6 +321,14 @@ class PointRegRelaxation {
       * @return true if converged, false otherwise
       */
      bool linear_projection(arma::colvec & opt_lp) const noexcept;
+
+     /** PointRegRelaxation::num_consistent_pairs()
+      * @brief get identified correspondences
+      *
+      * @param[in]
+      * @return number of pairwise consistencies identified
+      */
+     size_t const num_consistent_pairs() const noexcept { return ptr_obj_->get_weight_tensor().size(); }
 
      /** PointRegRelaxation::get_correspondences()
       * @brief get identified correspondences

@@ -20,6 +20,7 @@ namespace boopy = boost::python;
  */
 struct PythonConfig {
     double epsilon, pairwiseDistThreshold, corrThreshold;
+    size_t nPairThreshold;
     bool doWarmStart;
 };
 
@@ -61,6 +62,7 @@ struct PythonRegistration {
         config.pairwise_dist_threshold = pyConfig.pairwiseDistThreshold;
         config.corr_threshold = pyConfig.corrThreshold;
         config.do_warm_start = pyConfig.doWarmStart;
+        config.n_pair_threshold = pyConfig.nPairThreshold;
 
         //! setup main call
         arma::colvec optimum;
@@ -119,7 +121,8 @@ BOOST_PYTHON_MODULE(pyregistration) {
         .def_readwrite("epsilon", &PythonConfig::epsilon)
         .def_readwrite("pairwiseDistThreshold", &PythonConfig::pairwiseDistThreshold)
         .def_readwrite("corrThreshold", &PythonConfig::corrThreshold)
-        .def_readwrite("doWarmStart", &PythonConfig::doWarmStart);
+        .def_readwrite("doWarmStart", &PythonConfig::doWarmStart)
+        .def_readwrite("nPairThreshold", &PythonConfig::nPairThreshold);
     
     //! expose PyRegistration - NOTE: no default constructor is defined/exposed
     class_<PythonRegistration>("PythonRegistration", init<boopy::list, boopy::list, PythonConfig, size_t>())
