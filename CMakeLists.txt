@@ -38,11 +38,11 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
 add_library(registration SHARED src/registration.cpp src/correspondences.cpp)
 target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES} ${MLPACK_LIBRARIES}
-    ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${ORTOOLS_LIBRARIES})
+    ${CPPAD_LIBRARIES} ${Boost_LIBRARIES} ${ORTOOLS_LIBRARIES})
 
 add_library(pyregistration SHARED src/python-wrapper.cpp)
 set_target_properties(pyregistration PROPERTIES PREFIX "")
-target_link_libraries(pyregistration ${BOOST_LIBRARIES} ${PYTHON_LIBRARIES} registration)
+target_link_libraries(pyregistration ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} registration)
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/__init__.py "__all__ = ['pyregistration']")
 

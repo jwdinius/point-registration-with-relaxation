@@ -35,7 +35,6 @@ If you want to quickly modify parameters, including the sizes of the source and 
 
 ```shell
 # execute after building
-sudo ldconfig  # only need to run this once (per container launch, if using Docker)
 export PYTHONPATH=$PYTHONPATH:{path-to-repo}/build
 cd {path-to-repo}/scripts
 python wrapper-test.py
