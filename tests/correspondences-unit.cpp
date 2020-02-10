@@ -3,7 +3,6 @@
 #include <fstream>
 #include <streambuf>
 //! dependency headers
-#include <armadillo>
 #include <nlohmann/json.hpp>
 //! boost boilerplate
 #define BOOST_TEST_MODULE TestCorrespondenceUtils test

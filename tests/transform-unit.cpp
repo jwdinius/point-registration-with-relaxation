@@ -3,7 +3,6 @@
 #include <fstream>
 #include <streambuf>
 //! dependency headers
-#include <armadillo>
 #include <nlohmann/json.hpp>
 //! boost boilerplate
 #define BOOST_TEST_MODULE TestTransformUtils test
@@ -138,7 +137,7 @@ BOOST_AUTO_TEST_CASE( icp_test ) {
     //! create source points: R*(dst - dst_c) + src_c
     arma::mat const src( R * (dst - arma::repmat(dst_c, 1, dst.n_cols))
             + arma::repmat(src_c, 1, dst.n_cols) );
-    
+
     //! algorithm arguments
     size_t const & max_its = 20;
     double const & tol = FLOAT_TOL;
@@ -159,9 +158,9 @@ BOOST_AUTO_TEST_CASE( icp_test ) {
 
     //! initial guess for transformation - icp algorithm needs good initial guess to be successful
     arma::mat44 H_init(arma::fill::eye);
-    H_init(arma::span(0, 2), arma::span(0, 2)) = Rn * R.t(); 
+    H_init(arma::span(0, 2), arma::span(0, 2)) = Rn * R.t();
     H_init(arma::span(0, 2), 3) = dst_c - Rn * R.t() * src_c;
-    
+
     //! allocate nominal output
     arma::mat44 H_opt;
     {
@@ -264,4 +263,57 @@ BOOST_AUTO_TEST_CASE( icp_test_compare_to_matlab ) {
     arma::mat44 H_opt;
     BOOST_CHECK( reg::iterative_closest_point(src_pts, dst_pts, H_init, max_its, tol, rej_ratio, H_opt) );
     BOOST_CHECK(arma::approx_equal(H_opt, H_opt_matlab, "absdiff", 5e-3));
+}
+
+BOOST_AUTO_TEST_CASE( icp_test_from_nmsac ) {
+    //! load unit test data from json
+    std::ifstream ifs(data_path + "/points.json");
+    std::string json_str = std::string((std::istreambuf_iterator<char>(ifs)),
+            std::istreambuf_iterator<char>());
+    json json_data = json::parse(json_str);
+
+    //! source points
+    auto const & rows_src = json_data["source_pts"].size();
+    auto const & cols_src = json_data["source_pts"][0].size();
+    size_t i = 0;
+    arma::mat  src_pts(rows_src, cols_src);
+    for (auto const & it : json_data["source_pts"]) {
+        size_t j = 0;
+        for (auto const & jt : it) {
+            src_pts(i, j) = static_cast<double>(jt);
+            ++j;
+        }
+        ++i;
+    }
+
+    //! target points (to map src_pts onto)
+    auto const & rows_tgt = json_data["target_pts"].size();
+    auto const & cols_tgt = json_data["target_pts"][0].size();
+    i = 0;
+    arma::mat dst_pts(rows_tgt, cols_tgt);
+    for (auto const & it : json_data["target_pts"]) {
+        size_t j = 0;
+        for (auto const & jt : it) {
+            dst_pts(i, j) = static_cast<double>(jt);
+            ++j;
+        }
+        ++i;
+    }
+
+    //! CANDIDATE STARTING TRANSFORM FROM nmsac
+    arma::mat44 H_init(arma::fill::eye);
+    H_init << -0.5186 << -0.6399 << -0.5670 <<-0.4231 << arma::endr
+        << 0.5552 << -0.7564 << 0.3459 << -1.8731 << arma::endr
+        << -0.6502 << -0.1354 << 0.7476 << 2.8520 << arma::endr
+        << 0 << 0 << 0 << 1.0000 << arma::endr;
+
+    //! algorithm arguments
+    size_t const & max_its = 50;  // XXX because the icp function call returns false if max_its is exceeded, this number is important
+    double const & tol = 1e-8;
+    double const & rej_ratio = 0.3;  // XXX to converge with less iterations, increase this number
+
+    //! TEST CASE 1: nominal call from matlab implementation
+    //! allocate container for output
+    arma::mat44 H_opt;
+    BOOST_CHECK( reg::iterative_closest_point(src_pts, dst_pts, H_init, max_its, tol, rej_ratio, H_opt) );
 }

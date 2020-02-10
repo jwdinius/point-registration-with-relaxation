@@ -41,7 +41,12 @@ bool reg::best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 &
     } else if (dst_pts.n_rows != 3) {
         std::cout << static_cast<std::string>(__func__) << ": Second argument must be a matrix with 3 rows" << std::endl;
         return false;
+    } else if (src_pts.n_cols != dst_pts.n_cols) {
+        std::cout << static_cast<std::string>(__func__) <<
+            ": First and second arguments must have same number of columns" << std::endl;
+        return false;
     }
+
 
     arma::mat33 optimal_rot;
     arma::vec3 optimal_trans;

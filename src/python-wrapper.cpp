@@ -1,6 +1,5 @@
 #include <boost/make_shared.hpp>
 #include <boost/python.hpp>
-#include <armadillo>
 
 #include "correspondences/correspondences.hpp"
 #include "registration/registration.hpp"
@@ -76,7 +75,7 @@ struct PythonRegistration {
             auto const value = c.second;
             correspondences_[key] = value;
         }
-        
+
         for (size_t i = 0; i < optimum.n_elem; ++i) {
             optimum_.append(optimum(i));
         }
@@ -108,7 +107,7 @@ struct PythonRegistration {
 
 BOOST_PYTHON_MODULE(pyregistration) {
     PyEval_InitThreads();
-    
+
     using namespace boost::python;
     /**
      * @brief python module for point set registration using convex relaxation
@@ -123,7 +122,7 @@ BOOST_PYTHON_MODULE(pyregistration) {
         .def_readwrite("corrThreshold", &PythonConfig::corrThreshold)
         .def_readwrite("doWarmStart", &PythonConfig::doWarmStart)
         .def_readwrite("nPairThreshold", &PythonConfig::nPairThreshold);
-    
+
     //! expose PyRegistration - NOTE: no default constructor is defined/exposed
     class_<PythonRegistration>("PythonRegistration", init<boopy::list, boopy::list, PythonConfig, size_t>())
         .def_readonly("optimum", &PythonRegistration::optimum_)

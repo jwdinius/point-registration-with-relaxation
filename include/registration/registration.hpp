@@ -71,4 +71,4 @@ bool best_fit_transform(arma::mat src_pts, arma::mat dst_pts, arma::mat44 & H_op
 bool iterative_closest_point(arma::mat const & src_pts, arma::mat const & dst_pts,
         arma::mat44 & H_init, size_t const & max_its, double const & tolerance, double const & reject_ratio,
         arma::mat44 & H_optimal) noexcept;
-};
+};  // namespace registration

@@ -1,13 +1,15 @@
 #pragma once
 //! c/c++ headers
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 //! dependency headers
-#include <armadillo>
+#include <armadillo>  // NOLINT [build/include_order]
 #include <boost/functional/hash.hpp>
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
@@ -76,12 +78,12 @@ struct key_equal : public std::binary_function<WeightKey_t, WeightKey_t, bool> {
      * @param[in] v1 second key for equality check
      * @return flag indicating whether two keys are equal (=true) or not (=false)
      */
-   bool operator()(const WeightKey_t& v0, const WeightKey_t& v1) const {
-      return std::get<0>(v0) == std::get<0>(v1) &&
-             std::get<1>(v0) == std::get<1>(v1) &&
-             std::get<2>(v0) == std::get<2>(v1) &&
-             std::get<3>(v0) == std::get<3>(v1);
-   }
+    bool operator()(const WeightKey_t& v0, const WeightKey_t& v1) const {
+        return std::get<0>(v0) == std::get<0>(v1) &&
+            std::get<1>(v0) == std::get<1>(v1) &&
+            std::get<2>(v0) == std::get<2>(v1) &&
+            std::get<3>(v0) == std::get<3>(v1);
+    }
 };
 
 /** @typedef WeightTensor
@@ -146,7 +148,7 @@ class ConstrainedObjective {
       * @return
       */
      ~ConstrainedObjective();
-     
+
      /** ConstrainedObjective::operator()
       * @brief operator overload for IPOPT
       *
@@ -179,7 +181,7 @@ class ConstrainedObjective {
       * @return copy of private member `n_`
       */
      size_t const num_target_pts() const noexcept { return n_; }
-     
+
      /** ConstrainedObjective::num_min_corr()
       * @brief return minimum number of correspondences for optimization objective
       *
@@ -187,7 +189,7 @@ class ConstrainedObjective {
       * @return copy of private member `min_corr_`
       */
      size_t const num_min_corr() const noexcept { return min_corr_; }
-     
+
      /** ConstrainedObjective::state_length()
       * @brief get size of state vector for optimization objective
       *
@@ -219,7 +221,7 @@ class PointRegRelaxation {
       * @brief typedef for CppAD test vector
       */
      using Dvec = CPPAD_TESTVECTOR(double);
-     
+
      /** @typedef PointRegRelaxation::status_t
       * @brief typedef for IPOPT return code
       */
@@ -269,7 +271,7 @@ class PointRegRelaxation {
          ptr_obj_ = std::make_unique<ConstrainedObjective>(source_pts, target_pts, config, min_corr);
          optimum_.resize(ptr_obj_->state_length());
      }
-     
+
      /** PointRegRelaxation::~PointRegRelaxation()
       * @brief destructor for optimization wrapper class
       *
@@ -342,7 +344,7 @@ class PointRegRelaxation {
      Config config_;
      std::unique_ptr<ConstrainedObjective> ptr_obj_;
      correspondences_t correspondences_;
-     arma::colvec optimum_; 
+     arma::colvec optimum_;
 };
 
 /**
@@ -361,4 +363,4 @@ class PointRegRelaxation {
  */
 bool linear_programming(arma::colvec const & c, arma::mat const & A, arma::colvec const & b,
         double const & lower_bound, double const & upper_bound, arma::colvec & x_opt) noexcept;
-};
+};  // namespace correspondences

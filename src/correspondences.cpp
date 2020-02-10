@@ -217,8 +217,6 @@ void cor::ConstrainedObjective::operator()(cor::ConstrainedObjective::ADvector &
     for (size_t i = 0; i < m_; ++i) {
         fgrad[curr_idx] += z[i*(n_+1) + n_];
     }
-
-
 }
 
 /** PointRegRelaxation::~PointRegRelaxation()
@@ -296,7 +294,7 @@ void cor::PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noe
         // when i < m+1, assume no association
         if (i < (m-1)*(n+1) + n) {
             z[i] = 0.0;
-        } else { 
+        } else {
             z[i] = 1.0;
         }
     //! overwrite values at indices associated with best correspondence score
@@ -367,7 +365,7 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
 
     //! do warm start, if configured to do so
     Dvec z(n_vars);
-    if (config_.do_warm_start) { 
+    if (config_.do_warm_start) {
         warm_start(z);
     }
 
@@ -389,7 +387,7 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
         constraints_lb[ctr] = 1.;
         constraints_ub[ctr++] = 1.;
     }
-    
+
     constraints_lb[ctr] = n - m;
     constraints_ub[ctr++] = n - k;
     for (size_t j = 0; j < n; ++j) {
@@ -465,7 +463,7 @@ void cor::PointRegRelaxation::find_correspondences() noexcept {
     //! value is the strength of the correspondence (0 <= z_{ij} <= 1, closer to 1
     //! is better)
     for (auto const & c : corr_ids) {
-        auto const key = std::make_pair<size_t, size_t>(c / (n+1), c % (n+1));
+        auto const key = std::pair<size_t, size_t>(c / (n+1), c % (n+1));
         double const value = optimum_(c);
         //! discount slack variables
         if (key.first != m && key.second != n) {
