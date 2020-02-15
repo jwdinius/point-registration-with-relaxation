@@ -388,7 +388,8 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
         constraints_ub[ctr++] = 1.;
     }
 
-    constraints_lb[ctr] = n - m;
+    //constraints_lb[ctr] = n - m;
+    constraints_lb[ctr] = n - k;
     constraints_ub[ctr++] = n - k;
     for (size_t j = 0; j < n; ++j) {
         constraints_lb[ctr] = 1.;

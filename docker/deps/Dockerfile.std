@@ -1,0 +1,63 @@
+FROM ubuntu:bionic
+
+# NOTE: build this image from dir above Dockerfile location
+# USE BASH
+SHELL ["/bin/bash", "-c"]
+
+# RUN LINE BELOW TO REMOVE debconf ERRORS (MUST RUN BEFORE ANY apt-get CALLS)
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+
+# setup environment
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+#### UPDATE BEFORE REMAINDER
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
+
+# INSTALL SYSTEM-WIDE DEPENDENCIES
+RUN apt-get update && apt-get install -y --fix-missing cmake pkg-config git wget \
+    build-essential libboost-all-dev zip gfortran cppad python-dev python-pip
+RUN apt-get install -y --allow-unauthenticated libomp-dev libopenblas-dev liblapack-dev \
+    libarpack++2-dev
+
+# INSTALL IPOPT
+COPY install_ipopt.sh /
+RUN chmod a+rwx /install_ipopt.sh
+RUN wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.13.zip \
+    && unzip Ipopt-3.12.13.zip \
+    && ./install_ipopt.sh
+
+# INSTALL ARMADILLO
+RUN wget http://sourceforge.net/projects/arma/files/armadillo-9.700.2.tar.xz \
+    && tar -xf armadillo-9.700.2.tar.xz
+RUN cd armadillo-9.700.2 && cmake . && make -j2 && make install
+
+# INSTALL MLPACK
+RUN wget https://www.mlpack.org/files/mlpack-3.1.1.tar.gz \
+    && tar -xzf mlpack-3.1.1.tar.gz
+RUN cd mlpack-3.1.1 && mkdir build && cd build \
+    && cmake -DDEBUG=OFF -DPROFILE=OFF -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF .. \
+    && make -j2 && make install
+
+# INSTALL NLOHMANN_JSON (downloaded from github)
+RUN wget https://github.com/nlohmann/json/archive/v3.7.0.zip \
+    && unzip v3.7.0.zip
+RUN cd json* && mkdir build && cd build \
+    && cmake .. \
+    && make -j2 && make install
+
+# INSTALL OR-TOOLS (from binary)
+RUN apt-get install -y zlib1g-dev
+RUN wget https://github.com/google/or-tools/releases/download/v7.4/or-tools_ubuntu-18.04_v7.4.7247.tar.gz \
+    && tar -xvf or-tools_ubuntu-18.04_v7.4.7247.tar.gz
+ENV ORTOOLS_ROOT=/or-tools_Ubuntu-18.04-64bit_v7.4.7247
+
+# INSTALL NUMPY
+RUN pip install --no-cache-dir numpy==1.16.2
+RUN pip install --no-cache-dir matplotlib==2.0.2
+RUN pip install --no-cache-dir cpplint==1.4.5
+
+RUN apt-get install -y freeglut3-dev python-tk sudo
+
+# REMOVE ARCHIVES
+RUN rm *.tar.* && rm *.zip
