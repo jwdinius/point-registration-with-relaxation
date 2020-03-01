@@ -1,5 +1,5 @@
 # point-registration-with-relaxation
-This repo implements a convex relaxation of the binary optimization problem discussed in this [paper](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.140.910&rep=rep1&type=pdf), Section 5.4.  The repo's main contribution is to provide the core optimization engine for [NMSAC](https://github.com/jwdinius/nmsac), which seeks to employ the sample-and-consensus strategy of [RANSAC](https://en.wikipedia.org/wiki/Random_sample_consensus), but with higher quality transformation hypotheses than random sampling.
+This repo implements a convex relaxation of the binary optimization problem discussed in this [paper](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.140.910&rep=rep1&type=pdf), Section 5.4.  The repo's main contribution is to provide the core optimization engine for [NMSAC](https://github.com/jwdinius/nmsac), which seeks to employ the sample consensus strategy of [RANSAC](https://en.wikipedia.org/wiki/Random_sample_consensus), but with higher quality transformation hypotheses than random sampling.
 
 This repo also implements helper utilities for aligning point clouds after point correspondences have been identified.
 
