@@ -59,7 +59,7 @@ cor::WeightTensor cor::generate_weight_tensor(arma::mat const & source_pts, arma
                         arma::vec3 const sk = arma::vec3(source_pts.col(k));
                         arma::vec3 const tl = arma::vec3(target_pts.col(l));
                         double const c = consistency(si, tj, sk, tl);
-                        if (c < eps && arma::norm(si - sk, 2) > pw_thresh) {
+                        if (c <= eps && arma::norm(si - sk, 2) >= pw_thresh && arma::norm(tj - tl, 2) >= pw_thresh) {
                             weight[std::make_tuple(i, j, k, l)] = -std::exp(-c);
                         }
                     }
@@ -366,7 +366,8 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
     //! do warm start, if configured to do so
     Dvec z(n_vars);
     if (config_.do_warm_start) {
-        warm_start(z);
+        // XXX(jwd) - this functionality will be deprecated
+        // warm_start(z);
     }
 
     //! setup inequality constraints on variables: 0 <= z_{ij} <= 1 for all i,j
