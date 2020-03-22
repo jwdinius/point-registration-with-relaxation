@@ -39,6 +39,13 @@ RUN cd mlpack-3.1.1 && mkdir build && cd build \
     && cmake -DDEBUG=OFF -DPROFILE=OFF -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TESTS=OFF .. \
     && make -j2 && make install
 
+# INSTALL ENSMALLEN
+RUN wget https://github.com/mlpack/ensmallen/archive/2.11.5.zip \
+    && unzip 2.11.5.zip
+RUN cd ensmallen* && mkdir build && cd build \
+    && cmake -DBUILD_TESTS=OFF .. \
+    && make -j2 && make install
+
 # INSTALL NLOHMANN_JSON (downloaded from github)
 RUN wget https://github.com/nlohmann/json/archive/v3.7.0.zip \
     && unzip v3.7.0.zip

@@ -12,6 +12,7 @@ if (OPENMP_FOUND)
 endif()
 find_package(Armadillo REQUIRED)
 find_package(MLPACK REQUIRED)
+find_package(Ensmallen REQUIRED)
 find_package(Boost COMPONENTS system filesystem unit_test_framework python REQUIRED)
 find_package(PythonLibs 2.7 REQUIRED)
 find_package(nlohmann_json 3.7.0 REQUIRED)
@@ -26,6 +27,7 @@ add_definitions(-DUSE_GLOP)
 include_directories(
     ${ARMADILLO_INCLUDE_DIRS}
     ${MLPACK_INCLUDE_DIRS}
+    ${ENSMALLEN_INCLUDE_DIR}
     ${CPPAD_INCLUDE_DIRS}
     ${IPOPT_INCLUDE_DIRS}
     ${NLOHMANN_JSON_INCLUDE_INSTALL_DIR}
@@ -34,7 +36,7 @@ include_directories(
     "include"
 )
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -Wno-deprecated-declarations")
 
 add_library(registration SHARED src/registration.cpp src/correspondences.cpp)
 target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES} ${MLPACK_LIBRARIES}
@@ -76,3 +78,11 @@ target_link_libraries(correspondences-test ${Boost_FILESYSTEM_LIBRARY}
     registration
 )
 add_test(TestCorrespondenceUtils correspondences-test)
+
+add_executable(sdp-test tests/sdp-unit.cpp)
+target_link_libraries(sdp-test ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
+    ${ARMADILLO_LIBRARIES}
+)
+add_test(TestSDP sdp-test)
