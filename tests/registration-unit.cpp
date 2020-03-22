@@ -36,7 +36,6 @@ BOOST_AUTO_TEST_CASE( full_pipeline_test ) {
     config.pairwise_dist_threshold = 0.1;
     config.corr_threshold = 0.9;
     config.n_pair_threshold = 100;
-    config.do_warm_start = false;
 
     //! source pts
     auto const rows_S = json_data["source_pts"].size();
@@ -117,7 +116,6 @@ BOOST_AUTO_TEST_CASE( minimal_correspondences_full_pipeline_test ) {
     config.pairwise_dist_threshold = 0.1;
     config.corr_threshold = 0.5;
     config.n_pair_threshold = 100;
-    config.do_warm_start = false;
 
     //! source pts
     auto const rows_S = json_data["source_pts"].size();

@@ -13,14 +13,12 @@ namespace boopy = boost::python;
  * @var PyConfig::epsilon
  * @var PyConfig::pairwiseDistThreshold
  * @var PyConfig::corrThreshold
- * @var PyConfig::doWarmStart
  *
  * @note follows PEP-8 naming convention
  */
 struct PythonConfig {
     double epsilon, pairwiseDistThreshold, corrThreshold;
     size_t nPairThreshold;
-    bool doWarmStart;
 };
 
 /** @struct PythonRegistration
@@ -60,7 +58,6 @@ struct PythonRegistration {
         config.epsilon = pyConfig.epsilon;
         config.pairwise_dist_threshold = pyConfig.pairwiseDistThreshold;
         config.corr_threshold = pyConfig.corrThreshold;
-        config.do_warm_start = pyConfig.doWarmStart;
         config.n_pair_threshold = pyConfig.nPairThreshold;
 
         //! setup main call
@@ -120,7 +117,6 @@ BOOST_PYTHON_MODULE(pyregistration) {
         .def_readwrite("epsilon", &PythonConfig::epsilon)
         .def_readwrite("pairwiseDistThreshold", &PythonConfig::pairwiseDistThreshold)
         .def_readwrite("corrThreshold", &PythonConfig::corrThreshold)
-        .def_readwrite("doWarmStart", &PythonConfig::doWarmStart)
         .def_readwrite("nPairThreshold", &PythonConfig::nPairThreshold);
 
     //! expose PyRegistration - NOTE: no default constructor is defined/exposed
