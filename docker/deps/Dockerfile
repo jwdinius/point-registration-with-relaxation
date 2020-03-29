@@ -1,1 +1,1 @@
-Dockerfile.nvidia
+Dockerfile.std

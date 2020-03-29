@@ -14,6 +14,48 @@ using namespace ens;
  */
 static const double FLOAT_TOL(1e-3);  // XXX(jwd) - values on wikipedia only reported to 3 s.f.
 
+template <typename SDPType>
+static bool CheckKKT(const SDPType& sdp,
+                     const arma::mat& X,
+                     const arma::vec& ysparse,
+                     const arma::vec& ydense,
+                     const arma::mat& Z)
+{
+  // Require that the KKT optimality conditions for sdp are satisfied
+  // by the primal-dual pair (X, y, Z).
+
+  if (!X.is_sympd())
+    return false;
+  if (!Z.is_sympd())
+    return false;
+
+  bool success = true;
+  const double normXz = arma::norm(X * Z, "fro");
+  success &= (std::abs(normXz) < 1e-5);
+
+  for (size_t i = 0; i < sdp.NumSparseConstraints(); i++)
+  {
+    success &= (std::abs(
+        arma::dot(sdp.SparseA()[i], X) - sdp.SparseB()[i]) < 1e-5);
+  }
+
+  for (size_t i = 0; i < sdp.NumDenseConstraints(); i++)
+  {
+    success &= (std::abs(
+        arma::dot(sdp.DenseA()[i], X) - sdp.DenseB()[i]) < 1e-5);
+  }
+
+  arma::mat dualCheck = Z - sdp.C();
+  for (size_t i = 0; i < sdp.NumSparseConstraints(); i++)
+    dualCheck += ysparse(i) * sdp.SparseA()[i];
+  for (size_t i = 0; i < sdp.NumDenseConstraints(); i++)
+    dualCheck += ydense(i) * sdp.DenseA()[i];
+  const double dualInfeas = arma::norm(dualCheck, "fro");
+  success &= (dualInfeas < 1e-5);
+
+  return success;
+}
+
 //static inline SDP<arma::sp_mat> Ensmallen unit tests set this outside of function call??
 BOOST_AUTO_TEST_CASE( ensmallen_sdp_example_minimum ) {
   /*!
@@ -112,12 +154,14 @@ BOOST_AUTO_TEST_CASE( ensmallen_sdp_example_minimum ) {
   // use the PrimalDualSolver to solve it.
   // ens::PrimalDualSolver could be replaced with ens::LRSDP or other ensmallen
   // SDP solvers.
-  PrimalDualSolver<SDP<arma::sp_mat>> solver(sdp);
+  PrimalDualSolver<> solver;  // XXX(jwd) - the <> is a hack until ensmallen 2.12.0 is released
   arma::mat X, Z;
-  arma::vec ysparse, ydense;
+  arma::mat ysparse, ydense;
+  sdp.GetInitialPoints(X, ysparse, ydense, Z);
   // ysparse, ydense, and Z hold the primal and dual variables found during the
   // optimization.
-  static_cast<void>(solver.Optimize(X, ysparse, ydense, Z));
+  static_cast<void>(solver.Optimize(sdp, X, ysparse, ydense, Z));
+  BOOST_CHECK( CheckKKT(sdp, X, ysparse, ydense, Z) );
   BOOST_CHECK_SMALL(std::abs(X(0, 2) + 0.978), FLOAT_TOL);  // expected value is -0.978
 }
 
@@ -218,11 +262,13 @@ BOOST_AUTO_TEST_CASE( ensmallen_sdp_example_maximum ) {
   // use the PrimalDualSolver to solve it.
   // ens::PrimalDualSolver could be replaced with ens::LRSDP or other ensmallen
   // SDP solvers.
-  PrimalDualSolver<SDP<arma::sp_mat>> solver(sdp);
+  PrimalDualSolver<> solver;  // XXX(jwd) - the <> is a hack until ensmallen 2.12.0 is released
   arma::mat X, Z;
-  arma::vec ysparse, ydense;
+  arma::mat ysparse, ydense;
+  sdp.GetInitialPoints(X, ysparse, ydense, Z);
   // ysparse, ydense, and Z hold the primal and dual variables found during the
   // optimization.
-  static_cast<void>(solver.Optimize(X, ysparse, ydense, Z));
+  static_cast<void>(solver.Optimize(sdp, X, ysparse, ydense, Z));
+  BOOST_CHECK( CheckKKT(sdp, X, ysparse, ydense, Z) );
   BOOST_CHECK_SMALL(std::abs(X(0, 2) - 0.872), FLOAT_TOL);  // expected value is +0.872
 }

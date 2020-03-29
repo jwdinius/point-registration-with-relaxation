@@ -36,7 +36,7 @@ include_directories(
     "include"
 )
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -Wno-deprecated-declarations")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
 add_library(registration SHARED src/registration.cpp src/correspondences.cpp)
 target_link_libraries(registration ${IPOPT_LIBRARIES} ${ARMADILLO_LIBRARIES} ${MLPACK_LIBRARIES}
