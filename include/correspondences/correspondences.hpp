@@ -26,17 +26,13 @@ namespace correspondences {
  * value in optimum solution to declare a correspondence as valid {\in (0, 1)}
  * @var Config::n_pair_threshold
  * minimum number of pairwise consistencies 
- * @var Config::do_warm_start
- * flag indicating whether or not to do warm start before optimization
  */
 struct Config {
     Config() :
         epsilon(1e-1), pairwise_dist_threshold(1e-1),
-        corr_threshold(0.9), n_pair_threshold(std::numeric_limits<size_t>::signaling_NaN()),
-        do_warm_start(false) { }
+        corr_threshold(0.9), n_pair_threshold(std::numeric_limits<size_t>::signaling_NaN()) { }
     double epsilon, pairwise_dist_threshold, corr_threshold;
     size_t n_pair_threshold;
-    bool do_warm_start;
 };
 
 /** @typedef WeightKey_t
@@ -279,14 +275,6 @@ class PointRegRelaxation {
       * @return
       */
      ~PointRegRelaxation();
-
-     /** PointRegRelaxation::warm_start
-      * @brief compute feasible initial starting point for optimization based on correspondence weights
-      *
-      * @param[in][out] initial guess for optimization algorithm
-      * @return
-      */
-     void warm_start(Dvec & z_init) const noexcept;
 
      /** PointRegRelaxation::find_optimum()
       * @brief run IPOPT to find optimum for optimization objective

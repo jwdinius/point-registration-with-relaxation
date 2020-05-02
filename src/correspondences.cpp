@@ -229,84 +229,6 @@ void cor::ConstrainedObjective::operator()(cor::ConstrainedObjective::ADvector &
  */
 cor::PointRegRelaxation::~PointRegRelaxation() { }
 
-/** PointRegRelaxation::warm_start
- * @brief compute feasible initial starting point for optimization based on correspondence weights
- *
- * @param[in][out] initial guess for optimization algorithm
- * return
- *
- * @note see implementation for algorithm details
- */
-void cor::PointRegRelaxation::warm_start(PointRegRelaxation::Dvec & z) const noexcept {
-    //! look at weights and assign initial associations as those that are most likely
-    auto const & weights = ptr_obj_->get_weight_tensor();
-    std::map<double, WeightKey_t> swapped_map;
-    auto const & m = ptr_obj_->num_source_pts();
-    auto const & n = ptr_obj_->num_target_pts();
-    auto const & state_length = ptr_obj_->state_length();
-
-    for (auto const & pair : weights) {
-        auto const & key = pair.first;
-        auto const & val = pair.second;
-        swapped_map[val] = key;
-    }
-
-    //! choose best matches based upon correspondence scores
-    //! NOTE: this means using the reverse iterator because std::map
-    //! objects are sorted smallest-to-largest
-    std::vector<std::pair<size_t, size_t>> assocs;
-    for (auto cit = swapped_map.crbegin(); cit != swapped_map.crend(); ++cit) {
-        auto const & tup = cit->second;
-        size_t const i = std::get<0>(tup);
-        size_t const j = std::get<1>(tup);
-        size_t const k = std::get<2>(tup);
-        size_t const l = std::get<3>(tup);
-        //! try to associate both i->j AND k->l, but only if a "better" correspondence hasn't yet
-        //! been found
-        auto const assoc_ij = std::make_pair(i, j);
-        auto const assoc_kl = std::make_pair(k, l);
-        bool append_ij = true;
-        bool append_kl = true;
-        for (auto const & a : assocs) {
-            if (a.first == assoc_ij.first || a.second == assoc_ij.second) {
-                append_ij = false;
-            }
-            if (a.first == assoc_kl.first || a.second == assoc_kl.second) {
-                append_kl = false;
-            }
-        }
-        //! if a correspondence for i, j, k, or l have not been found, add the correspondences
-        //! i->j and/or k->l
-        if (append_ij) {
-            assocs.emplace_back(assoc_ij);
-        }
-        if (append_kl) {
-            assocs.emplace_back(assoc_kl);
-        }
-        //! if all associations have been made, exit the loop
-        if (assocs.size() == m) {
-            break;
-        }
-    }
-    //! initialize values with index in non-slack variables to -1.0 (no correspondence)
-    //! and slack-variables to 1.0 (again, no correspondence)
-    for (size_t i = 0; i < state_length; ++i)
-        // when i < m+1, assume no association
-        if (i < (m-1)*(n+1) + n) {
-            z[i] = 0.0;
-        } else {
-            z[i] = 1.0;
-        }
-    //! overwrite values at indices associated with best correspondence score
-    //! NOTE: this obeys equality constraints
-    for (auto const & a : assocs) {
-        z[a.first * (n+1) + a.second] = 1.0;
-        z[m * (n+1) + a.second] = 0.0;
-    }
-
-    return;
-}
-
 /** PointRegRelaxation::linear_projection
  * @brief Solve linear assignment problem:
  *  max c.t()*flatten(X) subject to linear constraints
@@ -363,12 +285,7 @@ cor::PointRegRelaxation::status_t cor::PointRegRelaxation::find_optimum() noexce
     auto const & n_vars = ptr_obj_->state_length();
     auto const & n_constraints = ptr_obj_->num_constraints();
 
-    //! do warm start, if configured to do so
     Dvec z(n_vars);
-    if (config_.do_warm_start) {
-        // XXX(jwd) - this functionality will be deprecated
-        // warm_start(z);
-    }
 
     //! setup inequality constraints on variables: 0 <= z_{ij} <= 1 for all i,j
     Dvec z_lb(n_vars);
