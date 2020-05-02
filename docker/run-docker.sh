@@ -9,4 +9,4 @@ docker run -it --rm \
     --net host \
     --privileged \
     $1 \
-    qap-register 
+    jdinius/qap-register:latest 

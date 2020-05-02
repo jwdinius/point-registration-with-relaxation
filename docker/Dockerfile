@@ -1,4 +1,4 @@
-FROM nmsac-deps
+FROM jdinius/nmsac-deps
 
 ARG username=relax
 ENV USER=$username

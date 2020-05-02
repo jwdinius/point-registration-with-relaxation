@@ -6,8 +6,10 @@
 #define BOOST_TEST_MODULE TestSDP test
 #include <boost/test/unit_test.hpp>
 //! project headers
+#include "correspondences/correspondences-sdp.hpp"
 
 using namespace ens;
+namespace cors = correspondences_sdp;
 
 /**
  * constants for test
@@ -271,4 +273,23 @@ BOOST_AUTO_TEST_CASE( ensmallen_sdp_example_maximum ) {
   static_cast<void>(solver.Optimize(sdp, X, ysparse, ydense, Z));
   BOOST_CHECK( CheckKKT(sdp, X, ysparse, ydense, Z) );
   BOOST_CHECK_SMALL(std::abs(X(0, 2) - 0.872), FLOAT_TOL);  // expected value is +0.872
+}
+
+BOOST_AUTO_TEST_CASE( test_constructor ) {
+  cors::Config config;
+  config.epsilon = 0.1;
+  config.pairwise_dist_threshold = 0.1;
+  config.corr_threshold = 0.9;
+  config.n_pair_threshold = 100;
+
+  arma::mat src(3, 4, arma::fill::randu);
+  arma::mat tgt(src);
+  cors::ConstrainedObjective opt(src, tgt, config, 3);
+
+  auto sdp = opt.get_sdp();
+  /*
+  for (auto a : sdp.SparseA()) {
+      arma::mat A(a);
+      std::cout << a << std::endl;
+  }*/
 }
